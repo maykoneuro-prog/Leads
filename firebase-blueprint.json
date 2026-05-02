@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "A SESI school unit in Pernambuco",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "city": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "An educational offering (e.g., Ensino Fundamental)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Lead": {
+      "title": "Interest Lead",
+      "description": "Information provided by a person interested in enrollment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "guardianName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "grade": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["New", "Contacted", "Interested", "Enrolled", "Cancelled"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      },
+      "required": ["name", "email", "phone", "schoolId", "courseId", "grade", "status"]
+    },
+    "UserRole": {
+      "title": "User Role",
+      "description": "System user roles and school affiliation",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "SchoolOperator", "Viewer"] },
+        "schoolId": { "type": "string", "description": "Affiliated school ID, if any" }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "schools": {
+      "schema": "School",
+      "description": "List of SESI PE units"
+    },
+    "courses": {
+      "schema": "Course",
+      "description": "List of educational levels offered"
+    },
+    "leads": {
+      "schema": "Lead",
+      "description": "Capture of interested parties"
+    },
+    "userRoles": {
+      "schema": "UserRole",
+      "description": "RBAC mapping for system users"
+    }
+  }
+}

@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'Admin';
+    }
+
+    function isSchoolOperator(schoolId) {
+      return isSignedIn() && 
+        getUserData().role == 'SchoolOperator' && 
+        getUserData().schoolId == schoolId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation for Lead
+    function isValidLead(data) {
+      return data.keys().hasAll(['name', 'guardianName', 'email', 'phone', 'schoolId', 'courseId', 'grade', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().size() >= 10 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.guardianName is string && data.guardianName.size() <= 200 &&
+             data.email is string && data.email.size() <= 200 &&
+             data.phone is string && data.phone.size() <= 50 &&
+             data.schoolId is string &&
+             data.courseId is string &&
+             data.grade is string &&
+             data.status in ['New', 'Contacted', 'Interested', 'Enrolled', 'Cancelled'] &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidLeadUpdate(data, existing) {
+      return data.updatedAt == request.time &&
+             data.name == existing.name &&
+             data.email == existing.email &&
+             data.schoolId == existing.schoolId;
+             // Allow status and notes updates
+    }
+
+    // --- Collections ---
+
+    // Schools: Read by all, Managed by Admin
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Courses: Read by all, Managed by Admin
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Leads: Public create, specific read/update
+    match /leads/{leadId} {
+      allow create: if isValidLead(request.resource.data);
+      
+      allow get: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId));
+      allow list: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId));
+
+      allow update: if (isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId))) && 
+                      request.resource.data.updatedAt == request.time &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'notes', 'updatedAt']);
+      
+      allow delete: if isAdmin();
+    }
+
+    // User Roles: Managed by Admin, read by self
+    match /userRoles/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+  }
+}
