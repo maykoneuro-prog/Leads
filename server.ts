@@ -280,17 +280,29 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        host: '0.0.0.0',
+        port: 3000
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
-    console.log("Vite middleware active");
+    console.log("Vite middleware active on 0.0.0.0:3000");
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    } else {
+      console.warn("Dist folder not found. SPA routes might not work.");
+      // Fallback for development if someone runs node server.ts without build
+      app.get("*", (req, res) => {
+        res.status(404).send("Application not built. Please run npm run build.");
+      });
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {

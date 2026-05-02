@@ -10,15 +10,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
   const [setupStatus, setSetupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const navigate = useNavigate();
 
   const handleSetup = async () => {
     setSetupStatus('loading');
     try {
-      const resp = await fetch('/api/seed-system', { method: 'POST' });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Falha ao inicializar');
+      const resp = await fetch('/api/health');
+      if (!resp.ok) throw new Error('Servidor indisponível');
+      
+      const seedResp = await fetch('/api/seed-system', { method: 'POST' });
+      const data = await seedResp.json();
+      if (!seedResp.ok) throw new Error(data.error || 'Falha ao inicializar');
       setSetupStatus('success');
       alert(data.message);
     } catch (err: any) {
@@ -31,24 +35,21 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLoadingStep('Iniciando...');
     setError('');
     
-    // Normalize user requirement: username becomes email if it doesn't have @
     let loginEmail = email.includes('@') ? email : `${email.toLowerCase()}@sesipe.com.br`.replace(/\s+/g, '');
 
     try {
-      // Step 0: Check if backend is alive
-      try {
-        const health = await fetch('/api/health');
-        if (!health.ok) throw new Error('Servidor indisponível');
-        console.log('Backend health info:', await health.json());
-      } catch (e) {
-        console.warn('Health check failed, proceeding anyway:', e);
+      setLoadingStep('Verificando servidor...');
+      const health = await fetch('/api/health').catch(() => ({ ok: false }));
+      if (!health.ok) {
+        console.warn('Backend appears offline');
       }
 
-      // USE SERVER LOGIN PROXY
+      setLoadingStep('Validando credenciais...');
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 15000); // 15s client-side timeout
+      const id = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
       const resp = await fetch('/api/login', {
         method: 'POST',
@@ -61,20 +62,22 @@ export default function LoginPage() {
       const data = await resp.json();
 
       if (!resp.ok) {
-        let msg = 'Credenciais inválidas. Verifique seu usuário e senha.';
+        let msg = 'Credenciais inválidas.';
         const code = data.code;
-        if (code === 'auth/user-not-found') msg = 'Usuário não cadastrado no sistema.';
+        if (code === 'auth/user-not-found') msg = 'Usuário não cadastrado.';
         if (code === 'auth/wrong-password') msg = 'Senha incorreta.';
         throw new Error(`${msg} (${code || 'error'})`);
       }
 
+      setLoadingStep('Finalizando acesso...');
       await signInWithCustomToken(auth, data.customToken);
       navigate('/admin/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Erro inesperado ao realizar login.');
+      setError(err.name === 'AbortError' ? 'O servidor demorou demais para responder. Tente novamente.' : (err.message || 'Erro inesperado.'));
     } finally {
       setLoading(false);
+      setLoadingStep('');
     }
   };
 
@@ -148,9 +151,18 @@ export default function LoginPage() {
           <button 
             type="submit"
             disabled={loading || setupStatus === 'loading'}
-            className="w-full py-4 bg-sesi-blue text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-800 transition-all flex items-center justify-center gap-3 disabled:opacity-50 shadow-xl shadow-sesi-blue/20 active:scale-[0.98]"
+            className="w-full py-4 bg-sesi-blue text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-800 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 shadow-xl shadow-sesi-blue/20 active:scale-[0.98]"
           >
-            {loading ? 'VERIFICANDO...' : setupStatus === 'loading' ? 'SINCRONIZANDO...' : <><LogIn size={18} /> Entrar</>}
+            {loading ? (
+              <>
+                <span>VERIFICANDO...</span>
+                <span className="text-[10px] font-medium opacity-70 tracking-normal">{loadingStep}</span>
+              </>
+            ) : setupStatus === 'loading' ? (
+              <span>SINCRONIZANDO...</span>
+            ) : (
+              <span className="flex items-center gap-3"><LogIn size={18} /> Entrar</span>
+            )}
           </button>
         </form>
 
