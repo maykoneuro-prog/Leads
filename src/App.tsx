@@ -13,7 +13,6 @@ import SchoolsPage from './pages/SchoolsPage';
 import CoursesPage from './pages/CoursesPage';
 import SchoolOffersPage from './pages/SchoolOffersPage';
 import UsersPage from './pages/UsersPage';
-import SetupPage from './pages/SetupPage';
 import SettingsPage from './pages/SettingsPage';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -44,7 +43,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/setup" element={<SetupPage />} />
           
           <Route path="/admin/*" element={
             <PrivateRoute>

@@ -11,12 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
-  const [setupStatus, setSetupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const navigate = useNavigate();
-
-  const handleSetup = () => {
-    navigate('/setup');
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,13 +72,6 @@ export default function LoginPage() {
               <div className="flex items-center gap-2">
                 <AlertCircle size={16} className="shrink-0" /> {error}
               </div>
-              <button 
-                type="button"
-                onClick={handleSetup}
-                className="mt-2 text-blue-700 underline text-left"
-              >
-                Clique aqui para sincronizar/recuperar usuários caso o erro persista.
-              </button>
             </motion.div>
           )}
 
@@ -121,7 +109,7 @@ export default function LoginPage() {
 
           <button 
             type="submit"
-            disabled={loading || setupStatus === 'loading'}
+            disabled={loading}
             className="w-full py-4 bg-sesi-blue text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-800 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 shadow-xl shadow-sesi-blue/20 active:scale-[0.98]"
           >
             {loading ? (
@@ -129,8 +117,6 @@ export default function LoginPage() {
                 <span>VERIFICANDO...</span>
                 <span className="text-[10px] font-medium opacity-70 tracking-normal">{loadingStep}</span>
               </>
-            ) : setupStatus === 'loading' ? (
-              <span>SINCRONIZANDO...</span>
             ) : (
               <span className="flex items-center gap-3"><LogIn size={18} /> Entrar</span>
             )}
@@ -139,9 +125,6 @@ export default function LoginPage() {
 
         <div className="text-center pt-4">
           <a href="/" className="text-xs font-bold text-slate-400 hover:text-sesi-blue transition-colors uppercase tracking-tight block">← Retornar ao site público</a>
-          {setupStatus === 'success' && (
-            <p className="mt-2 text-xs text-green-600 font-bold">✓ Sistema sincronizado!</p>
-          )}
         </div>
       </motion.div>
     </div>
