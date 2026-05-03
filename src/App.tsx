@@ -9,6 +9,10 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import LeadManagement from './pages/LeadManagement';
+import SchoolsPage from './pages/SchoolsPage';
+import CoursesPage from './pages/CoursesPage';
+import SchoolOffersPage from './pages/SchoolOffersPage';
+import UsersPage from './pages/UsersPage';
 import SetupPage from './pages/SetupPage';
 import SettingsPage from './pages/SettingsPage';
 import Sidebar from './components/Sidebar';
@@ -47,6 +51,10 @@ export default function App() {
               <Routes>
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="leads" element={<LeadManagement />} />
+                <Route path="schools" element={<SchoolsPage />} />
+                <Route path="courses" element={<CoursesPage />} />
+                <Route path="offers" element={<SchoolOffersPage />} />
+                <Route path="users" element={<UsersPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="dashboard" />} />
               </Routes>

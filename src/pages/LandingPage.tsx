@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { School, Course } from '../types';
-import { INITIAL_COURSES, GRADES_BY_COURSE } from '../constants';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, doc, increment, updateDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { School, Course, SchoolOffer } from '../types';
 import { motion } from 'motion/react';
-import { CheckCircle, School as SchoolIcon, GraduationCap, Phone, Mail, User, Info } from 'lucide-react';
+import { CheckCircle, School as SchoolIcon, GraduationCap, Phone, Mail, User, Info, AlertCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [offers, setOffers] = useState<SchoolOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -24,26 +24,71 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      const schoolSnap = await getDocs(collection(db, 'schools'));
-      const courseSnap = await getDocs(collection(db, 'courses'));
-      setSchools(schoolSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as School)));
-      setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
+    // Schools
+    const unsubSchools = onSnapshot(collection(db, 'schools'), (snap) => {
+      setSchools(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as School)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'schools'));
+
+    // Courses
+    const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
+      setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'courses'));
+
+    // Active Offers
+    const qOffers = query(collection(db, 'schoolOffers'), where('active', '==', true));
+    const unsubOffers = onSnapshot(qOffers, (snap) => {
+      setOffers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SchoolOffer)));
       setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'schoolOffers'));
+
+    return () => {
+      unsubSchools();
+      unsubCourses();
+      unsubOffers();
     };
-    fetchData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Find the offer to check vacancy one last time
+    const offer = offers.find(o => 
+      o.schoolId === formData.schoolId && 
+      o.courseId === formData.courseId && 
+      o.grade === formData.grade
+    );
+
+    if (!offer) {
+      alert('Esta oferta não está mais disponível.');
+      return;
+    }
+
+    if (offer.slots - offer.enrolledCount <= 0) {
+      alert('Desculpe, as vagas para esta turma acabaram de ser preenchidas.');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      // 1. Create Lead
       await addDoc(collection(db, 'leads'), {
         ...formData,
         status: 'New',
+        logs: [{
+          userName: 'Sistema',
+          action: 'Cadastro realizado pelo portal público',
+          timestamp: new Date()
+        }],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // 2. Increment enrolledCount in offer
+      await updateDoc(doc(db, 'schoolOffers', offer.id), {
+        enrolledCount: increment(1),
+        updatedAt: serverTimestamp()
+      });
+
       setSuccess(true);
     } catch (error) {
       console.error(error);
@@ -53,7 +98,19 @@ export default function LandingPage() {
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Carregando...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 font-sans font-bold text-sesi-blue animate-pulse">Carregando portal SESI...</div>;
+
+  // Filter logic
+  const availableOffersForSchool = offers.filter(o => 
+    o.schoolId === formData.schoolId && 
+    (o.slots - o.enrolledCount > 0)
+  );
+
+  const availableCourseIds = Array.from(new Set(availableOffersForSchool.map(o => o.courseId)));
+  const availableGrades = Array.from(new Set(availableOffersForSchool
+    .filter(o => o.courseId === formData.courseId)
+    .map(o => o.grade)
+  ));
 
   if (success) {
     return (
@@ -204,7 +261,7 @@ export default function LandingPage() {
                     required
                     className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-sesi-blue/5 focus:border-sesi-blue outline-none transition-all appearance-none cursor-pointer"
                     value={formData.schoolId}
-                    onChange={e => setFormData({...formData, schoolId: e.target.value})}
+                    onChange={e => setFormData({...formData, schoolId: e.target.value, courseId: '', grade: ''})}
                   >
                     <option value="">Selecione uma unidade...</option>
                     {schools.map(school => (
@@ -221,14 +278,18 @@ export default function LandingPage() {
                         className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-sesi-blue/5 focus:border-sesi-blue outline-none transition-all appearance-none cursor-pointer"
                         value={formData.courseId}
                         onChange={e => setFormData({...formData, courseId: e.target.value, grade: ''})}
+                        disabled={!formData.schoolId}
                       >
-                        <option value="">Nível de Ensino...</option>
-                        {courses.map(course => (
-                          <option key={course.id} value={course.id}>{course.name}</option>
-                        ))}
+                        <option value="">{formData.schoolId ? 'Selecione o nível de ensino' : 'Selecione a unidade primeiro'}</option>
+                        {courses
+                          .filter(course => availableCourseIds.includes(course.id))
+                          .map(course => (
+                            <option key={course.id} value={course.id}>{course.name}</option>
+                          ))
+                        }
                       </select>
                       
-                      {formData.courseId && (
+                        {formData.courseId && (
                         <motion.select 
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
@@ -238,10 +299,17 @@ export default function LandingPage() {
                           onChange={e => setFormData({...formData, grade: e.target.value})}
                         >
                           <option value="">Selecione a Série...</option>
-                          {GRADES_BY_COURSE[courses.find(c => c.id === formData.courseId)?.name || '']?.map(grade => (
+                          {availableGrades.map(grade => (
                             <option key={grade} value={grade}>{grade}</option>
                           ))}
                         </motion.select>
+                      )}
+                      
+                      {formData.schoolId && availableCourseIds.length === 0 && !loading && (
+                        <div className="flex items-center gap-2 p-3 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold border border-orange-100">
+                          <AlertCircle size={14} />
+                          Esta unidade não possui vagas disponíveis no momento.
+                        </div>
                       )}
                     </div>
                   </div>

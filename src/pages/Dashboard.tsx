@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, where, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
-import { Lead, School, Course } from '../types';
+import { Lead, School, Course, SchoolOffer } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line 
 } from 'recharts';
-import { Users, School as SchoolIcon, BookOpen, Clock, TrendingUp } from 'lucide-react';
+import { Users, School as SchoolIcon, BookOpen, Clock, TrendingUp, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
+import { cn } from '../lib/utils';
+import AdminSeeder from '../components/AdminSeeder';
 
 export default function Dashboard() {
   const { roleData } = useAuth();
@@ -18,26 +20,45 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      let leadQuery = collection(db, 'leads');
-      if (roleData?.role === 'SchoolOperator' && roleData.schoolId) {
-        leadQuery = query(leadQuery, where('schoolId', '==', roleData.schoolId)) as any;
-      }
-      
-      const [leadSnap, schoolSnap, courseSnap] = await Promise.all([
-        getDocs(leadQuery),
-        getDocs(collection(db, 'schools')),
-        getDocs(collection(db, 'courses'))
-      ]);
+    if (!roleData) return;
 
-      setLeads(leadSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Lead)));
-      setSchools(schoolSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as School)));
-      setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
-      setLoading(false);
+    const fetchData = async () => {
+      try {
+        let leadQuery = collection(db, 'leads');
+        let offerQuery = collection(db, 'schoolOffers');
+        
+        if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
+          leadQuery = query(leadQuery, where('schoolId', '==', roleData.schoolId)) as any;
+          offerQuery = query(offerQuery, where('schoolId', '==', roleData.schoolId)) as any;
+        }
+        
+        const [leadSnap, schoolSnap, courseSnap, offerSnap] = await Promise.all([
+          getDocs(leadQuery).catch(e => handleFirestoreError(e, OperationType.LIST, 'leads')),
+          getDocs(collection(db, 'schools')).catch(e => handleFirestoreError(e, OperationType.LIST, 'schools')),
+          getDocs(collection(db, 'courses')).catch(e => handleFirestoreError(e, OperationType.LIST, 'courses')),
+          getDocs(offerQuery).catch(e => handleFirestoreError(e, OperationType.LIST, 'schoolOffers'))
+        ]) as any;
+
+        setLeads(leadSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Lead)));
+        setSchools(schoolSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as School)));
+        setCourses(courseSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Course)));
+        const currentOffers = offerSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as SchoolOffer));
+        
+        setStats({
+          totalSlots: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.slots, 0),
+          totalEnrolled: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.enrolledCount, 0),
+        });
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Dashboard Fetch Error:', error);
+      }
     };
 
     fetchData();
   }, [roleData]);
+
+  const [stats, setStats] = useState({ totalSlots: 0, totalEnrolled: 0 });
 
   if (loading) return <div className="text-gray-500 animate-pulse">Carregando métricas...</div>;
 
@@ -93,15 +114,13 @@ export default function Dashboard() {
         </div>
       </header>
 
+      <AdminSeeder />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total de Interesses" value={leads.length} icon={Users} color="text-slate-800" details={`${leads.length > 0 ? '+12% este mês' : 'Iniciando captação'}`} />
-        <StatCard title="Novos Hoje" value={leads.filter(l => {
-          const today = new Date();
-          const leadDate = l.createdAt?.toDate();
-          return leadDate && leadDate.toDateString() === today.toDateString();
-        }).length} icon={Clock} color="text-orange-500" details="Aguardando primeiro contato" />
-        <StatCard title="Matriculados" value={leads.filter(l => l.status === 'Enrolled').length} icon={TrendingUp} color="text-green-600" details={`${leads.length > 0 ? ((leads.filter(l => l.status === 'Enrolled').length / leads.length) * 100).toFixed(1) : 0}% de conversão`} />
-        <StatCard title="Unidades Ativas" value={schools.length} icon={SchoolIcon} color="text-sesi-blue" details={`SESI Pernambuco`} />
+        <StatCard title="Ocupação de Vagas" value={stats.totalEnrolled} icon={TrendingUp} color="text-sesi-blue" details={`De ${stats.totalSlots} vagas ofertadas`} />
+        <StatCard title="Matriculados" value={leads.filter(l => l.status === 'Enrolled').length} icon={GraduationCap} color="text-green-600" details={`${leads.length > 0 ? ((leads.filter(l => l.status === 'Enrolled').length / leads.length) * 100).toFixed(1) : 0}% de conversão`} />
+        <StatCard title="Unidades Ativas" value={schools.length} icon={SchoolIcon} color="text-slate-400" details={`Rede SESI Pernambuco`} />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">

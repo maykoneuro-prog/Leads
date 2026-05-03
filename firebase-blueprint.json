@@ -11,9 +11,10 @@
         "city": { "type": "string" },
         "address": { "type": "string" },
         "phone": { "type": "string" },
-        "email": { "type": "string" }
+        "email": { "type": "string" },
+        "offeredCourses": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["id", "name", "slug"]
+      "required": ["id", "name"]
     },
     "Course": {
       "title": "Course",
@@ -22,9 +23,26 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "grades": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "name"]
+    },
+    "SchoolOffer": {
+      "title": "School Offer",
+      "description": "Specific course/grade offering by a school with vacancy control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "grade": { "type": "string" },
+        "slots": { "type": "integer" },
+        "enrolledCount": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schoolId", "courseId", "grade", "slots", "enrolledCount"]
     },
     "Lead": {
       "title": "Interest Lead",
@@ -45,7 +63,8 @@
         },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
-        "notes": { "type": "string" }
+        "notes": { "type": "string" },
+        "logs": { "type": "array" }
       },
       "required": ["name", "email", "phone", "schoolId", "courseId", "grade", "status"]
     },
@@ -70,6 +89,10 @@
     "courses": {
       "schema": "Course",
       "description": "List of educational levels offered"
+    },
+    "schoolOffers": {
+      "schema": "SchoolOffer",
+      "description": "Specific offerings per school"
     },
     "leads": {
       "schema": "Lead",

@@ -1,56 +1,135 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, where, orderBy, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, query, onSnapshot, where, orderBy, updateDoc, doc, deleteDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
-import { Lead, School, Course } from '../types';
-import { Search, Filter, MoreHorizontal, MessageCircle, Mail, Phone, Trash2, Check, X, Edit2, GraduationCap } from 'lucide-react';
-import { formatDate } from '../lib/utils';
+import { Lead, School, Course, SchoolOffer } from '../types';
+import { Search, Filter, MessageCircle, Mail, Phone, Trash2, Check, X, Edit2, GraduationCap, History, Send, Loader2 } from 'lucide-react';
+import { formatDate, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function LeadManagement() {
-  const { roleData } = useAuth();
+  const { roleData, user: authUser } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [schoolFilter, setSchoolFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  
+  // Interaction Modal State
+  const [interactionModal, setInteractionModal] = useState<{ open: boolean, comment: string, lead: Lead | null }>({
+    open: false,
+    comment: '',
+    lead: null
+  });
 
   useEffect(() => {
-    const fetchData = async () => {
-      let leadQuery = query(collection(db, 'leads'), orderBy('createdAt', 'desc')) as any;
-      if (roleData?.role === 'SchoolOperator' && roleData.schoolId) {
-        leadQuery = query(collection(db, 'leads'), where('schoolId', '==', roleData.schoolId), orderBy('createdAt', 'desc')) as any;
-      }
-      
-      const [leadSnap, schoolSnap, courseSnap] = await Promise.all([
-        getDocs(leadQuery),
-        getDocs(collection(db, 'schools')),
-        getDocs(collection(db, 'courses'))
-      ]);
+    if (!roleData) return;
+    if (roleData.role === 'SchoolOperator') {
+      setSchoolFilter(roleData.schoolId || '');
+    }
 
-      setLeads(leadSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Lead)));
-      setSchools(schoolSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as School)));
-      setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
+    // Static data (schools/courses)
+    const unsubSchools = onSnapshot(collection(db, 'schools'), (snap) => {
+      setSchools(snap.docs.map(d => ({ id: d.id, ...d.data() } as School)));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'schools'));
+    
+    const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
+      setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Course)));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'courses'));
+
+    // Dynamic leads data
+    let leadQuery = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
+    if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
+      leadQuery = query(collection(db, 'leads'), where('schoolId', '==', roleData.schoolId), orderBy('createdAt', 'desc'));
+    }
+
+    const unsubscribeLeads = onSnapshot(leadQuery, (snap) => {
+      setLeads(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
       setLoading(false);
-    };
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'leads'));
 
-    fetchData();
+    return () => {
+      unsubSchools();
+      unsubCourses();
+      unsubscribeLeads();
+    };
   }, [roleData]);
 
-  const updateStatus = async (leadId: string, status: string) => {
+  const addLog = async (leadId: string, action: string, comment?: string) => {
+    if (!authUser || !roleData) return;
+    
+    const logEntry = {
+      userId: authUser.uid,
+      userName: authUser.email || 'Usuário',
+      action,
+      comment,
+      timestamp: new Date()
+    };
+
+    try {
+      const leadRef = doc(db, 'leads', leadId);
+      await updateDoc(leadRef, {
+        logs: arrayUnion(logEntry),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `leads/${leadId}/logs`);
+    }
+  };
+
+  const updateStatus = async (leadId: string, status: string, comment?: string) => {
     try {
       await updateDoc(doc(db, 'leads', leadId), {
         status,
         updatedAt: serverTimestamp()
       });
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: status as any } : l));
-      if (selectedLead?.id === leadId) setSelectedLead({ ...selectedLead, status: status as any });
+      await addLog(leadId, `Status alterado para ${getStatusLabel(status)}`, comment);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `leads/${leadId}/status`);
+    }
+  };
+
+  const recordInteraction = async () => {
+    if (!interactionModal.lead || !interactionModal.comment.trim()) {
+      alert('Por favor, registre o retorno do contato.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const lead = interactionModal.lead;
+      
+      // Update status to contacted if it was new
+      const newStatus = lead.status === 'New' ? 'Contacted' : lead.status;
+      
+      await updateDoc(doc(db, 'leads', lead.id), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      await addLog(lead.id, 'Contato via WhatsApp realizado', interactionModal.comment);
+      
+      setInteractionModal({ open: false, comment: '', lead: null });
+      alert('Interação registrada com sucesso!');
     } catch (error) {
       console.error(error);
-      alert('Erro ao atualizar status.');
+      alert('Erro ao registrar interação.');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const openWhatsApp = (lead: Lead) => {
+    const school = schools.find(s => s.id === lead.schoolId);
+    const message = `Olá ${lead.guardianName}, falamos do SESI ${school?.name || ''}. Vimos seu interesse para ${lead.name} no ${lead.grade}. Podemos conversar?`;
+    const url = `https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    
+    window.open(url, '_blank');
+    setInteractionModal({ open: true, comment: '', lead });
   };
 
   const deleteLead = async (leadId: string) => {
@@ -60,8 +139,7 @@ export default function LeadManagement() {
       setLeads(prev => prev.filter(l => l.id !== leadId));
       setSelectedLead(null);
     } catch (error) {
-      console.error(error);
-      alert('Erro ao excluir lead.');
+      handleFirestoreError(error, OperationType.DELETE, `leads/${leadId}`);
     }
   };
 
@@ -70,7 +148,9 @@ export default function LeadManagement() {
                           l.email.toLowerCase().includes(filter.toLowerCase()) ||
                           l.phone.includes(filter);
     const matchesStatus = statusFilter === '' || l.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesSchool = schoolFilter === '' || l.schoolId === schoolFilter;
+    const matchesCourse = courseFilter === '' || l.courseId === courseFilter;
+    return matchesSearch && matchesStatus && matchesSchool && matchesCourse;
   });
 
   const getStatusColor = (status: string) => {
@@ -105,23 +185,44 @@ export default function LeadManagement() {
           <p className="text-sm text-slate-500">Acompanhamento de intenções registradas no portal</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text"
               placeholder="Nome, e-mail ou telefone..."
-              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sesi-blue/20 focus:border-sesi-blue transition w-64 md:w-80 text-sm"
+              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sesi-blue/20 focus:border-sesi-blue transition w-64 text-sm"
               value={filter}
               onChange={e => setFilter(e.target.value)}
             />
           </div>
+
+          {roleData?.role === 'Admin' && (
+            <select 
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sesi-blue/20 focus:border-sesi-blue transition text-sm font-medium text-slate-600"
+              value={schoolFilter}
+              onChange={e => setSchoolFilter(e.target.value)}
+            >
+              <option value="">Todas Unidades</option>
+              {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
+
+          <select 
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sesi-blue/20 focus:border-sesi-blue transition text-sm font-medium text-slate-600"
+            value={courseFilter}
+            onChange={e => setCourseFilter(e.target.value)}
+          >
+            <option value="">Todos Níveis</option>
+            {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+
           <select 
             className="px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sesi-blue/20 focus:border-sesi-blue transition text-sm font-medium text-slate-600"
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
           >
-            <option value="">Filtro: Status</option>
+            <option value="">Todos Status</option>
             <option value="New">Novo</option>
             <option value="Contacted">Contatado</option>
             <option value="Interested">Interessado</option>
@@ -229,10 +330,10 @@ export default function LeadManagement() {
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Ações de Gestão</label>
                   <div className="grid grid-cols-2 gap-3">
                     <button 
-                      onClick={() => updateStatus(selectedLead.id, 'Contacted')}
-                      className="p-3 bg-yellow-50 text-yellow-700 border border-yellow-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-yellow-100 transition"
+                      onClick={() => openWhatsApp(selectedLead)}
+                      className="p-3 bg-green-50 text-green-700 border border-green-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition"
                     >
-                      <Phone size={16} /> Marcar Contato
+                      <MessageCircle size={16} /> Contato WhatsApp
                     </button>
                     <button 
                       onClick={() => updateStatus(selectedLead.id, 'Interested')}
@@ -255,24 +356,86 @@ export default function LeadManagement() {
                   </div>
                 </section>
 
-                <div className="pt-8 flex flex-col gap-3">
-                   <a 
-                    href={`https://wa.me/${selectedLead.phone.replace(/\D/g, '')}?text=Olá ${selectedLead.guardianName}, falamos do SESI ${schools.find(s => s.id === selectedLead.schoolId)?.name}. Vimos seu interesse para ${selectedLead.name}...`}
-                    target="_blank"
-                    className="w-full py-4 bg-green-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition shadow-lg shadow-green-100"
-                   >
-                     <MessageCircle size={20} /> Abrir WhatsApp
-                   </a>
-                   <a 
-                    href={`mailto:${selectedLead.email}?subject=Interesse de Matrícula SESI PE&body=Prezada(o) ${selectedLead.guardianName}...`}
-                    className="w-full py-4 bg-blue-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-800 transition"
-                   >
-                     <Mail size={20} /> Enviar E-mail
-                   </a>
-                </div>
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    <History size={14} />
+                    Histórico de Interações
+                  </div>
+                  <div className="space-y-3">
+                    {selectedLead.logs?.sort((a: any, b: any) => {
+                      const timeA = a.timestamp?.toDate?.() || a.timestamp;
+                      const timeB = b.timestamp?.toDate?.() || b.timestamp;
+                      return timeB - timeA;
+                    }).map((log, idx) => (
+                      <div key={idx} className="relative pl-4 border-l-2 border-slate-100 pb-2">
+                        <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-slate-200 border-2 border-white" />
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                          {log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : formatDate(new Date(log.timestamp))} • {log.userName}
+                        </div>
+                        <div className="text-xs font-bold text-slate-700">{log.action}</div>
+                        {log.comment && (
+                          <div className="mt-1 p-2 bg-slate-50 rounded text-xs text-slate-600 border border-slate-100">
+                            {log.comment}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {(!selectedLead.logs || selectedLead.logs.length === 0) && (
+                      <p className="text-xs text-slate-400 italic">Nenhum histórico registrado ainda.</p>
+                    )}
+                  </div>
+                </section>
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {interactionModal.open && (
+           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 bg-green-600 text-white">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-xl font-bold">Registro de Contato</h3>
+                  <MessageCircle size={24} className="opacity-50" />
+                </div>
+                <p className="text-sm opacity-90">WhatsApp aberto para {interactionModal.lead?.guardianName}. O que o responsável falou?</p>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Observações do Contato (Obrigatório)</label>
+                  <textarea 
+                    className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none resize-none text-sm"
+                    placeholder="Ex: Responsável atendeu e ficou de levar a documentação na próxima terça..."
+                    value={interactionModal.comment}
+                    onChange={e => setInteractionModal(prev => ({ ...prev, comment: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                   <button 
+                    onClick={() => setInteractionModal({ open: false, comment: '', lead: null })}
+                    className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition"
+                   >
+                     Cancelar
+                   </button>
+                   <button 
+                    onClick={recordInteraction}
+                    disabled={!interactionModal.comment.trim()}
+                    className="flex-[2] py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                   >
+                     <Send size={18} /> Salvar Retorno
+                   </button>
+                </div>
+              </div>
+            </motion.div>
+           </div>
         )}
       </AnimatePresence>
     </div>

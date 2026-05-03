@@ -20,13 +20,13 @@ export const INITIAL_COURSES: Omit<Course, 'id'>[] = [
   { name: 'Ensino Fundamental I' },
   { name: 'Ensino Fundamental II' },
   { name: 'Ensino Médio' },
-  { name: 'EJA - Educação para Jovens e Adultos' },
+  { name: 'EJA' },
 ];
 
 export const GRADES_BY_COURSE: Record<string, string[]> = {
-  'Educação Infantil': ['Grupo 3', 'Grupo 4', 'Grupo 5'],
+  'Educação Infantil': ['Infantil I', 'Infantil II', 'Infantil III', 'Infantil IV', 'Infantil V'],
   'Ensino Fundamental I': ['1º Ano', '2º Ano', '3º Ano', '4º Ano', '5º Ano'],
   'Ensino Fundamental II': ['6º Ano', '7º Ano', '8º Ano', '9º Ano'],
-  'Ensino Médio': ['1ª Série', '2ª Série', '3ª Série'],
-  'EJA - Educação para Jovens e Adultos': ['Fase I', 'Fase II', 'Fase III', 'Fase IV'],
+  'Ensino Médio': ['1º Ano', '2º Ano', '3º Ano'],
+  'EJA': ['EJA I', 'EJA II', 'EJA III', 'EJA IV'],
 };

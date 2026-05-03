@@ -12,12 +12,33 @@ export interface School {
   address?: string;
   phone?: string;
   email?: string;
+  offeredCourses?: string[];
 }
 
 export interface Course {
   id: string;
   name: string;
   description?: string;
+  grades?: string[];
+}
+
+export interface SchoolOffer {
+  id: string;
+  schoolId: string;
+  courseId: string; // e.g. "ensino-medio"
+  grade: string;    // e.g. "1º Ano"
+  slots: number;
+  enrolledCount: number;
+  active: boolean;
+  updatedAt: any;
+}
+
+export interface LeadLog {
+  userId: string;
+  userName: string;
+  action: string;
+  comment?: string;
+  timestamp: any;
 }
 
 export interface Lead {
@@ -33,6 +54,7 @@ export interface Lead {
   createdAt: any;
   updatedAt: any;
   notes?: string;
+  logs?: LeadLog[];
 }
 
 export interface UserRoleRecord {

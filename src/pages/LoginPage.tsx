@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithCustomToken } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -41,40 +41,41 @@ export default function LoginPage() {
     let loginEmail = email.includes('@') ? email : `${email.toLowerCase()}@sesipe.com.br`.replace(/\s+/g, '');
 
     try {
-      setLoadingStep('Verificando servidor...');
-      const health = await fetch('/api/health').catch(() => ({ ok: false }));
-      if (!health.ok) {
-        console.warn('Backend appears offline');
-      }
-
-      setLoadingStep('Validando credenciais...');
+      setLoadingStep('Validando acesso...');
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 20000); // 20s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+      // Verify with server first (to check existence and roles)
       const resp = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password }),
         signal: controller.signal
       });
-      clearTimeout(id);
+      clearTimeout(timeoutId);
 
       const data = await resp.json();
-
       if (!resp.ok) {
-        let msg = 'Credenciais inválidas.';
-        const code = data.code;
-        if (code === 'auth/user-not-found') msg = 'Usuário não cadastrado.';
-        if (code === 'auth/wrong-password') msg = 'Senha incorreta.';
-        throw new Error(`${msg} (${code || 'error'})`);
+        throw new Error(data.error || 'Credenciais inválidas.');
       }
 
-      setLoadingStep('Finalizando acesso...');
-      await signInWithCustomToken(auth, data.customToken);
+      setLoadingStep('Autenticando...');
+      // Sign in locally to establish the session for Firestore rules
+      await signInWithEmailAndPassword(auth, loginEmail, password);
+      
+      setLoadingStep('Redirecionando...');
       navigate('/admin/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.name === 'AbortError' ? 'O servidor demorou demais para responder. Tente novamente.' : (err.message || 'Erro inesperado.'));
+      if (err.name === 'AbortError') {
+        setError('O servidor demorou demais para responder. Tente novamente.');
+      } else if (err.code === 'auth/user-not-found') {
+        setError('Usuário não cadastrado.');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Senha incorreta.');
+      } else {
+        setError(err.message || 'Erro inesperado ao realizar login.');
+      }
     } finally {
       setLoading(false);
       setLoadingStep('');
