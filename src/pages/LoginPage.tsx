@@ -14,22 +14,8 @@ export default function LoginPage() {
   const [setupStatus, setSetupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const navigate = useNavigate();
 
-  const handleSetup = async () => {
-    setSetupStatus('loading');
-    try {
-      const resp = await fetch('/api/health');
-      if (!resp.ok) throw new Error('Servidor indisponível');
-      
-      const seedResp = await fetch('/api/seed-system', { method: 'POST' });
-      const data = await seedResp.json();
-      if (!seedResp.ok) throw new Error(data.error || 'Falha ao inicializar');
-      setSetupStatus('success');
-      alert(data.message);
-    } catch (err: any) {
-      console.error(err);
-      alert('Erro ao sincronizar: ' + err.message);
-      setSetupStatus('error');
-    }
+  const handleSetup = () => {
+    navigate('/setup');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,38 +27,22 @@ export default function LoginPage() {
     let loginEmail = email.includes('@') ? email : `${email.toLowerCase()}@sesipe.com.br`.replace(/\s+/g, '');
 
     try {
-      setLoadingStep('Validando acesso...');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      // Verify with server first (to check existence and roles)
-      const resp = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data.error || 'Credenciais inválidas.');
-      }
-
       setLoadingStep('Autenticando...');
       // Sign in locally to establish the session for Firestore rules
+      // We skip the /api/login check because it is redundant and 
+      // fails on serverless environments like Vercel without custom backend setup.
       await signInWithEmailAndPassword(auth, loginEmail, password);
       
       setLoadingStep('Redirecionando...');
       navigate('/admin/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      if (err.name === 'AbortError') {
-        setError('O servidor demorou demais para responder. Tente novamente.');
-      } else if (err.code === 'auth/user-not-found') {
-        setError('Usuário não cadastrado.');
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError('Usuário não cadastrado ou credencial inválida.');
       } else if (err.code === 'auth/wrong-password') {
         setError('Senha incorreta.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('E-mail inválido.');
       } else {
         setError(err.message || 'Erro inesperado ao realizar login.');
       }
