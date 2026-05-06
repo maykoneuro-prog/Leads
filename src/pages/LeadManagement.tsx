@@ -20,10 +20,11 @@ export default function LeadManagement() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   
   // Interaction Modal State
-  const [interactionModal, setInteractionModal] = useState<{ open: boolean, comment: string, lead: Lead | null }>({
+  const [interactionModal, setInteractionModal] = useState<{ open: boolean, comment: string, lead: Lead | null, type: 'whatsapp' | 'note' }>({
     open: false,
     comment: '',
-    lead: null
+    lead: null,
+    type: 'note'
   });
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function LeadManagement() {
 
   const recordInteraction = async () => {
     if (!interactionModal.lead || !interactionModal.comment.trim()) {
-      alert('Por favor, registre o retorno do contato.');
+      alert('Por favor, registre a observação.');
       return;
     }
 
@@ -103,17 +104,21 @@ export default function LeadManagement() {
       setLoading(true);
       const lead = interactionModal.lead;
       
-      // Update status to contacted if it was new
-      const newStatus = lead.status === 'New' ? 'Contacted' : lead.status;
+      const actionLabel = interactionModal.type === 'whatsapp' 
+        ? 'Contato via WhatsApp realizado' 
+        : 'Observação interna registrada';
+
+      // Update status to contacted if it was new and via WhatsApp
+      const newStatus = (lead.status === 'New' && interactionModal.type === 'whatsapp') ? 'Contacted' : lead.status;
       
       await updateDoc(doc(db, 'leads', lead.id), {
         status: newStatus,
         updatedAt: serverTimestamp()
       });
 
-      await addLog(lead.id, 'Contato via WhatsApp realizado', interactionModal.comment);
+      await addLog(lead.id, actionLabel, interactionModal.comment);
       
-      setInteractionModal({ open: false, comment: '', lead: null });
+      setInteractionModal({ open: false, comment: '', lead: null, type: 'note' });
       alert('Interação registrada com sucesso!');
     } catch (error) {
       console.error(error);
@@ -129,7 +134,7 @@ export default function LeadManagement() {
     const url = `https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
     
     window.open(url, '_blank');
-    setInteractionModal({ open: true, comment: '', lead });
+    setInteractionModal({ open: true, comment: '', lead, type: 'whatsapp' });
   };
 
   const deleteLead = async (leadId: string) => {
@@ -336,6 +341,12 @@ export default function LeadManagement() {
                       <MessageCircle size={16} /> Contato WhatsApp
                     </button>
                     <button 
+                      onClick={() => setInteractionModal({ open: true, comment: '', lead: selectedLead, type: 'note' })}
+                      className="p-3 bg-slate-50 text-slate-700 border border-slate-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition"
+                    >
+                      <Edit2 size={16} /> Adicionar Nota
+                    </button>
+                    <button 
                       onClick={() => updateStatus(selectedLead.id, 'Interested')}
                       className="p-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-indigo-100 transition"
                     >
@@ -399,20 +410,30 @@ export default function LeadManagement() {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
             >
-              <div className="p-6 bg-green-600 text-white">
+              <div className={cn("p-6 text-white", interactionModal.type === 'whatsapp' ? "bg-green-600" : "bg-sesi-blue")}>
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-xl font-bold">Registro de Contato</h3>
-                  <MessageCircle size={24} className="opacity-50" />
+                  <h3 className="text-xl font-bold">
+                    {interactionModal.type === 'whatsapp' ? 'Registro de Contato' : 'Nova Observação'}
+                  </h3>
+                  {interactionModal.type === 'whatsapp' ? (
+                    <MessageCircle size={24} className="opacity-50" />
+                  ) : (
+                    <Edit2 size={24} className="opacity-50" />
+                  )}
                 </div>
-                <p className="text-sm opacity-90">WhatsApp aberto para {interactionModal.lead?.guardianName}. O que o responsável falou?</p>
+                <p className="text-sm opacity-90">
+                  {interactionModal.type === 'whatsapp' 
+                    ? `WhatsApp aberto para ${interactionModal.lead?.guardianName}. O que o responsável falou?`
+                    : `Adicione uma nota interna sobre o atendimento de ${interactionModal.lead?.name}.`}
+                </p>
               </div>
               
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Observações do Contato (Obrigatório)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Comentário (Obrigatório)</label>
                   <textarea 
-                    className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none resize-none text-sm"
-                    placeholder="Ex: Responsável atendeu e ficou de levar a documentação na próxima terça..."
+                    className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 outline-none resize-none text-sm"
+                    placeholder="Descreva aqui o resultado do contato ou observação..."
                     value={interactionModal.comment}
                     onChange={e => setInteractionModal(prev => ({ ...prev, comment: e.target.value }))}
                   />
@@ -420,7 +441,7 @@ export default function LeadManagement() {
                 
                 <div className="flex gap-2">
                    <button 
-                    onClick={() => setInteractionModal({ open: false, comment: '', lead: null })}
+                    onClick={() => setInteractionModal({ open: false, comment: '', lead: null, type: 'note' })}
                     className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition"
                    >
                      Cancelar
@@ -428,9 +449,12 @@ export default function LeadManagement() {
                    <button 
                     onClick={recordInteraction}
                     disabled={!interactionModal.comment.trim()}
-                    className="flex-[2] py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    className={cn(
+                      "flex-[2] py-3 text-white font-bold rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2",
+                      interactionModal.type === 'whatsapp' ? "bg-green-600 hover:bg-green-700" : "bg-sesi-blue hover:bg-blue-800"
+                    )}
                    >
-                     <Send size={18} /> Salvar Retorno
+                     <Send size={18} /> Salvar
                    </button>
                 </div>
               </div>

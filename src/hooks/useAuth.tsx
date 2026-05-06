@@ -23,12 +23,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (u) {
         try {
           const roleDoc = await getDoc(doc(db, 'userRoles', u.uid));
+          const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+          
           if (roleDoc.exists()) {
-            setRoleData(roleDoc.data() as UserRoleRecord);
+            const data = roleDoc.data() as UserRoleRecord;
+            // Force Admin if email is in the master list, even if record exists
+            if (adminEmails.includes(u.email || '')) {
+              setRoleData({ ...data, role: 'Admin' });
+            } else {
+              setRoleData(data);
+            }
           } else {
-            // Auto-promote first user or specific email to Admin if record missing
-            // This is helpful for initial setup or if session is lost
-            const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+            // Auto-promote specific email to Admin if record missing
             if (adminEmails.includes(u.email || '')) {
               const defaultAdmin: UserRoleRecord = {
                 uid: u.uid,
