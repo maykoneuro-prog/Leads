@@ -16,7 +16,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (roleData?.role !== 'Admin') return;
+    
+    // Safety timeout to avoid getting stuck on loading
+    const timeout = setTimeout(() => {
+      if (loading) setLoading(false);
+    }, 5000);
 
     const fetchData = async () => {
       try {
@@ -33,14 +37,22 @@ export default function SettingsPage() {
       }
     };
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'banner'), (snap) => {
-      if (snap.exists()) {
-        setSettings(snap.data() as AppSettings);
-      }
-    });
-
-    fetchData();
-    return () => unsubSettings();
+    if (roleData?.role === 'Admin') {
+      const unsubSettings = onSnapshot(doc(db, 'settings', 'banner'), (snap) => {
+        if (snap.exists()) {
+          setSettings(snap.data() as AppSettings);
+        }
+      });
+      
+      fetchData();
+      return () => {
+        clearTimeout(timeout);
+        unsubSettings();
+      };
+    } else {
+      setLoading(false);
+      return () => clearTimeout(timeout);
+    }
   }, [authLoading, roleData]);
 
   const handleSaveBanner = async () => {

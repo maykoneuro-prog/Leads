@@ -128,6 +128,9 @@ export default function AdminSeeder() {
         }
       ];
 
+      // Explicitly delete 'ensino-religioso' if it exists to avoid confusion
+      batch.delete(doc(db, 'courses', 'ensino-religioso'));
+
       for (const c of courses) {
         const id = c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
         batch.set(doc(db, 'courses', id), {
