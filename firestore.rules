@@ -127,5 +127,16 @@ service cloud.firestore {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if isAdmin();
     }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /leadPhones/{phone} {
+      allow get: if true;
+      allow create: if true;
+      allow delete: if isAdmin();
+    }
   }
 }

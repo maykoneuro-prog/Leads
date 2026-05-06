@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, doc, increment, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, doc, increment, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { School, Course, SchoolOffer } from '../types';
+import { School, Course, SchoolOffer, AppSettings } from '../types';
 import { motion } from 'motion/react';
-import { CheckCircle, School as SchoolIcon, GraduationCap, Phone, Mail, User, Info, AlertCircle } from 'lucide-react';
+import { CheckCircle, School as SchoolIcon, GraduationCap, Phone, Mail, User, Info, AlertCircle, XCircle, MessageCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [offers, setOffers] = useState<SchoolOffer[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Math CAPTCHA State
+  const [captcha, setCaptcha] = useState({ num1: 0, num2: 0, userAnswer: '' });
+
+  const generateCaptcha = () => {
+    setCaptcha({
+      num1: Math.floor(Math.random() * 10) + 1,
+      num2: Math.floor(Math.random() * 10) + 1,
+      userAnswer: ''
+    });
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -24,6 +37,11 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
+    // Settings
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'banner'), (doc) => {
+      if (doc.exists()) setSettings(doc.data() as AppSettings);
+    });
+
     // Schools
     const unsubSchools = onSnapshot(collection(db, 'schools'), (snap) => {
       setSchools(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as School)));
@@ -41,7 +59,10 @@ export default function LandingPage() {
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'schoolOffers'));
 
+    generateCaptcha();
+
     return () => {
+      unsubSettings();
       unsubSchools();
       unsubCourses();
       unsubOffers();
@@ -50,8 +71,16 @@ export default function LandingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    // 1. Validate CAPTCHA
+    if (parseInt(captcha.userAnswer) !== captcha.num1 + captcha.num2) {
+      setError('O resultado da soma está incorreto. Tente novamente.');
+      generateCaptcha();
+      return;
+    }
     
-    // Find the offer to check vacancy one last time
+    // 2. Find the offer to check vacancy
     const offer = offers.find(o => 
       o.schoolId === formData.schoolId && 
       o.courseId === formData.courseId && 
@@ -59,18 +88,29 @@ export default function LandingPage() {
     );
 
     if (!offer) {
-      alert('Esta oferta não está mais disponível.');
+      setError('Esta oferta não está mais disponível.');
       return;
     }
 
     if (offer.slots - offer.enrolledCount <= 0) {
-      alert('Desculpe, as vagas para esta turma acabaram de ser preenchidas.');
+      setError('Desculpe, as vagas para esta turma acabaram de ser preenchidas.');
       return;
     }
 
     setSubmitting(true);
     try {
-      // 1. Create Lead
+      // 3. Duplicate check (Phone/WhatsApp)
+      const phoneClean = formData.phone.replace(/\D/g, '');
+      const phoneRef = doc(db, 'leadPhones', phoneClean);
+      const phoneSnap = await getDoc(phoneRef);
+      
+      if (phoneSnap.exists()) {
+        setError('Este número de telefone/WhatsApp já possui um cadastro de interesse ativo.');
+        setSubmitting(false);
+        return;
+      }
+
+      // 4. Create Lead
       await addDoc(collection(db, 'leads'), {
         ...formData,
         status: 'New',
@@ -83,7 +123,13 @@ export default function LandingPage() {
         updatedAt: serverTimestamp(),
       });
 
-      // 2. Increment enrolledCount in offer
+      // 5. Register phone to prevent duplicates
+      await setDoc(phoneRef, {
+        registeredAt: serverTimestamp(),
+        email: formData.email
+      });
+
+      // 6. Increment enrolledCount in offer
       await updateDoc(doc(db, 'schoolOffers', offer.id), {
         enrolledCount: increment(1),
         updatedAt: serverTimestamp()
@@ -92,7 +138,7 @@ export default function LandingPage() {
       setSuccess(true);
     } catch (error) {
       console.error(error);
-      alert('Erro ao enviar cadastro. Tente novamente.');
+      setError('Erro ao enviar cadastro. Tente novamente mais tarde.');
     } finally {
       setSubmitting(false);
     }
@@ -140,6 +186,13 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden font-sans">
+      {/* Top Banner */}
+      {settings?.showBanner && settings.topBannerText && (
+        <div className="bg-orange-500 text-white py-3 px-4 text-center text-sm font-bold tracking-tight shadow-sm sticky top-0 z-[60]">
+          {settings.topBannerText}
+        </div>
+      )}
+
       {/* Hero Section */}
       <header className="bg-sesi-blue py-20 px-4 text-center relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2),transparent)] pointer-events-none" />
@@ -250,7 +303,39 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="space-y-6 pt-6">
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl text-sm font-bold flex items-center gap-3"
+              >
+                <XCircle size={18} />
+                {error}
+              </motion.div>
+            )}
+
+            <div className="space-y-6 pt-6 border-t border-slate-50">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <AlertCircle size={14} /> Verificacão de Segurança
+              </h3>
+              <div className="flex flex-col md:flex-row items-center gap-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="text-lg font-black text-slate-700 bg-white px-6 py-3 rounded-xl border border-slate-200 shadow-sm">
+                  {captcha.num1} + {captcha.num2} = ?
+                </div>
+                <div className="flex-1 w-full">
+                  <input 
+                    required
+                    type="number"
+                    placeholder="Digite o resultado"
+                    className="w-full p-3.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sesi-blue/5 focus:border-sesi-blue outline-none transition-all"
+                    value={captcha.userAnswer}
+                    onChange={e => setCaptcha({...captcha, userAnswer: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 pt-6 mb-8 border-t border-slate-50">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <SchoolIcon size={14} /> Preferências Educacionais
               </h3>
@@ -335,6 +420,41 @@ export default function LandingPage() {
           </form>
         </motion.div>
       </main>
+
+      {/* Schools Contact Section */}
+      <section className="max-w-4xl mx-auto px-4 pb-24">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Dúvidas e Informações</h2>
+          <p className="text-slate-500 font-medium">Entre em contato direto com a unidade de sua preferência pelo WhatsApp</p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {schools.map(school => (
+            school.whatsapp ? (
+              <a 
+                key={school.id}
+                href={`https://wa.me/55${school.whatsapp.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex items-center justify-between p-5 bg-white border border-slate-200 rounded-2xl hover:border-sesi-blue hover:shadow-xl hover:shadow-sesi-blue/5 transition-all active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-green-50 text-green-600 rounded-xl flex items-center justify-center group-hover:bg-sesi-blue group-hover:text-white transition-colors">
+                    <MessageCircle size={24} />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover:text-sesi-blue transition-colors">{school.name}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{school.city}</div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 group-hover:bg-green-50 group-hover:text-green-600 group-hover:border-green-100 transition-all">
+                  →
+                </div>
+              </a>
+            ) : null
+          ))}
+        </div>
+      </section>
 
       <footer className="bg-white border-t border-slate-100 py-12 text-center">
         <div className="max-w-4xl mx-auto px-4 space-y-4">

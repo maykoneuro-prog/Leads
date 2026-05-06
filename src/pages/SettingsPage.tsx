@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, getDocs, updateDoc, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
-import { School, Course } from '../types';
-import { School as SchoolIcon, BookOpen, Plus, Save, Trash2, MapPin, Phone } from 'lucide-react';
+import { School, Course, AppSettings } from '../types';
+import { School as SchoolIcon, BookOpen, Plus, Save, Trash2, MapPin, Phone, Megaphone, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function SettingsPage() {
   const { roleData } = useAuth();
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [settings, setSettings] = useState<AppSettings>({ topBannerText: '', showBanner: false });
   const [loading, setLoading] = useState(true);
+  const [savingBanner, setSavingBanner] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,18 +24,79 @@ export default function SettingsPage() {
       setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
       setLoading(false);
     };
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'banner'), (snap) => {
+      if (snap.exists()) {
+        setSettings(snap.data() as AppSettings);
+      }
+    });
+
     fetchData();
+    return () => unsubSettings();
   }, []);
 
+  const handleSaveBanner = async () => {
+    setSavingBanner(true);
+    try {
+      await setDoc(doc(db, 'settings', 'banner'), {
+        ...settings,
+        updatedAt: new Date()
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/banner');
+    } finally {
+      setSavingBanner(false);
+    }
+  };
+
   if (roleData?.role !== 'Admin') return <div className="p-8 text-center text-gray-500 italic">Apenas administradores podem acessar estas configurações.</div>;
-  if (loading) return <div>Carregando configurações...</div>;
+  if (loading) return <div className="p-8 flex items-center justify-center gap-2"><Loader2 className="animate-spin" /> Carregando configurações...</div>;
 
   return (
     <div className="max-w-4xl space-y-12 pb-20">
       <header>
-        <h1 className="text-3xl font-bold text-gray-900">Unidades & Cursos</h1>
-        <p className="text-gray-500 font-sans">Gerencie os parâmetros globais do sistema</p>
+        <h1 className="text-3xl font-bold text-gray-900">Configurações Globais</h1>
+        <p className="text-gray-500 font-sans">Gerencie os parâmetros do sistema e portal público</p>
       </header>
+
+      {/* Banner Configuration */}
+      <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Megaphone className="text-orange-500" /> Banner de Destaque (Topo)
+        </h2>
+        
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <input 
+              type="checkbox"
+              id="showBanner"
+              className="w-5 h-5 rounded-md border-gray-300 text-orange-600 focus:ring-orange-500"
+              checked={settings.showBanner}
+              onChange={e => setSettings({...settings, showBanner: e.target.checked})}
+            />
+            <label htmlFor="showBanner" className="font-bold text-gray-700">Ativar banner no topo do portal</label>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-600">Texto do Banner</label>
+            <textarea 
+              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500 outline-none transition-all resize-none font-medium"
+              rows={2}
+              placeholder="Ex: MATRÍCULAS ABERTAS 2025 - VAGAS LIMITADAS!"
+              value={settings.topBannerText}
+              onChange={e => setSettings({...settings, topBannerText: e.target.value})}
+            />
+          </div>
+
+          <button 
+            onClick={handleSaveBanner}
+            disabled={savingBanner}
+            className="flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors disabled:opacity-50"
+          >
+            {savingBanner ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar Configuração
+          </button>
+        </div>
+      </section>
 
       <section className="space-y-6">
         <div className="flex items-center justify-between">

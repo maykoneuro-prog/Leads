@@ -11,8 +11,14 @@ export interface School {
   city: string;
   address?: string;
   phone?: string;
+  whatsapp?: string;
   email?: string;
   offeredCourses?: string[];
+}
+
+export interface AppSettings {
+  topBannerText?: string;
+  showBanner?: boolean;
 }
 
 export interface Course {

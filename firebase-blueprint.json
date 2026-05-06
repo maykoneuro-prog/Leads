@@ -11,10 +11,21 @@
         "city": { "type": "string" },
         "address": { "type": "string" },
         "phone": { "type": "string" },
+        "whatsapp": { "type": "string", "description": "WhatsApp number with area code" },
         "email": { "type": "string" },
         "offeredCourses": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "name"]
+    },
+    "AppSettings": {
+      "title": "App Settings",
+      "description": "Global configuration like banner text",
+      "type": "object",
+      "properties": {
+        "topBannerText": { "type": "string" },
+        "showBanner": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
     },
     "Course": {
       "title": "Course",
@@ -101,6 +112,10 @@
     "userRoles": {
       "schema": "UserRole",
       "description": "RBAC mapping for system users"
+    },
+    "settings": {
+      "schema": "AppSettings",
+      "description": "Global app configurations"
     }
   }
 }

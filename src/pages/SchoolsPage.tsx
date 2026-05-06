@@ -8,6 +8,7 @@ interface School {
   id: string;
   name: string;
   city: string;
+  whatsapp?: string;
   active: boolean;
   email?: string;
   offeredCourses?: string[];
@@ -24,7 +25,7 @@ export default function SchoolsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', city: '', offeredCourses: [] as string[] });
+  const [editForm, setEditForm] = useState({ name: '', city: '', whatsapp: '', offeredCourses: [] as string[] });
   const [updating, setUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -55,6 +56,7 @@ export default function SchoolsPage() {
     setEditForm({ 
       name: school.name, 
       city: school.city, 
+      whatsapp: school.whatsapp || '',
       offeredCourses: school.offeredCourses || [] 
     });
   };
@@ -76,6 +78,7 @@ export default function SchoolsPage() {
       await updateDoc(doc(db, 'schools', id), {
         name: editForm.name,
         city: editForm.city,
+        whatsapp: editForm.whatsapp,
         offeredCourses: editForm.offeredCourses
       });
       setEditingId(null);
@@ -176,10 +179,20 @@ export default function SchoolsPage() {
                           type="text"
                           value={editForm.city}
                           onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
-                          className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none mb-2"
+                          className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none mb-2 text-sm"
                           placeholder="Cidade"
                         />
-                        <div className="flex flex-wrap gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-slate-400">WhatsApp (apenas números)</label>
+                          <input
+                            type="text"
+                            value={editForm.whatsapp}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, whatsapp: e.target.value.replace(/\D/g, '') }))}
+                            className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            placeholder="Ex: 81988887777"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-2">
                           {availableCourses.map(course => (
                             <label 
                               key={course.id} 
