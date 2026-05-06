@@ -143,6 +143,19 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-600">Título do Formulário</label>
+              <input 
+                type="text"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all font-medium text-sm"
+                placeholder="Ex: Matrícula 2025"
+                value={settings.formTitle || ''}
+                onChange={e => setSettings({...settings, formTitle: e.target.value})}
+              />
+            </div>
+          </div>
+
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500">Métrica 1 (Valor)</label>

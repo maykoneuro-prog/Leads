@@ -300,7 +300,9 @@ export default function LandingPage() {
                 <div className="inline-flex px-3 py-1 bg-sesi-blue/5 text-sesi-blue rounded-full text-[10px] font-black uppercase tracking-widest mb-2">
                   Leva menos de 1 minuto
                 </div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-tight">Matrícula 2025</h2>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-tight">
+                  {settings?.formTitle || 'Matrícula 2025'}
+                </h2>
                 <p className="text-slate-500 font-medium">Preencha e entraremos em contato</p>
               </div>
               

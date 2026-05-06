@@ -28,6 +28,7 @@ export interface AppSettings {
   metric2Label?: string;
   alertTitle?: string;
   alertDescription?: string;
+  formTitle?: string;
 }
 
 export interface Course {

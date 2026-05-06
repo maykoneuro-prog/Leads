@@ -33,6 +33,7 @@
         "metric2Label": { "type": "string" },
         "alertTitle": { "type": "string" },
         "alertDescription": { "type": "string" },
+        "formTitle": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
