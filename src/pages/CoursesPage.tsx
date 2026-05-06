@@ -82,7 +82,7 @@ export default function CoursesPage() {
     <div className="space-y-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Níveis de Ensino</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Nível de Ensino</h1>
           <p className="text-slate-500 text-sm">Gerencie os cursos e séries ofertados pela rede SESI.</p>
         </div>
         

@@ -269,7 +269,7 @@ export default function SettingsPage() {
       <section className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <BookOpen className="text-orange-600" /> Níveis de Ensino
+            <BookOpen className="text-orange-600" /> Nível de Ensino
           </h2>
           <button className="flex items-center gap-2 text-sm text-orange-600 font-bold hover:underline">
             <Plus size={16} /> Novo Nível
@@ -279,7 +279,10 @@ export default function SettingsPage() {
         <div className="space-y-3">
           {courses.map(course => (
             <div key={course.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-              <p className="font-bold text-gray-700">{course.name}</p>
+              <div className="flex flex-col">
+                <p className="font-bold text-gray-700">{course.name}</p>
+                <p className="text-[10px] text-gray-400 font-mono uppercase">{course.id}</p>
+              </div>
               <div className="flex gap-4">
                 <button className="text-xs font-bold text-gray-400 hover:text-orange-600 uppercase tracking-widest">Editar</button>
               </div>

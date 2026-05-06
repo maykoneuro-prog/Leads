@@ -23,7 +23,7 @@ export default function Sidebar() {
 
   const adminItems = [
     { name: 'Gerenciar Unidades', path: '/admin/schools', icon: SchoolIcon },
-    { name: 'Níveis de Ensino', path: '/admin/courses', icon: BookOpen },
+    { name: 'Nível de Ensino', path: '/admin/courses', icon: BookOpen },
     { name: 'Gerenciar Usuários', path: '/admin/users', icon: Users },
     { name: 'Configurações', path: '/admin/settings', icon: Settings },
   ];
