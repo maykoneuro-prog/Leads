@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { LogIn, Lock, Mail, AlertCircle } from 'lucide-react';
+import { LogIn, Lock, Mail, AlertCircle, User } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -22,6 +23,20 @@ export default function LoginPage() {
     let loginEmail = email.includes('@') ? email : `${email.toLowerCase()}@sesipe.com.br`.replace(/\s+/g, '');
 
     try {
+      setLoadingStep('Verificando credenciais...');
+      
+      // If user provided something that definitely isn't an email (no @ and looks like a name)
+      // and we want to support "NAME" login:
+      if (!email.includes('@')) {
+        const q = query(collection(db, 'userRoles'), where('name', '==', email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const userData = snap.docs[0].data();
+          loginEmail = userData.email;
+          setLoadingStep(`Bem-vindo, ${userData.name}...`);
+        }
+      }
+
       setLoadingStep('Autenticando...');
       // Sign in locally to establish the session for Firestore rules
       // We skip the /api/login check because it is redundant and 

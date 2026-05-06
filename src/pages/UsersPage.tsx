@@ -21,7 +21,10 @@ export default function UsersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
-  const [editForm, setEditForm] = useState({ name: '', role: '', schoolId: '' });
+  const [editForm, setEditForm] = useState({ name: '', role: 'SchoolOperator', schoolId: '' });
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'SchoolOperator', schoolId: '' });
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -69,15 +72,69 @@ export default function UsersPage() {
         body: JSON.stringify({ email, newPassword })
       });
 
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Falha ao atualizar senha');
+      if (!resp.ok) {
+        let errorMsg = 'Falha ao atualizar senha';
+        try {
+          const data = await resp.json();
+          errorMsg = data.error || errorMsg;
+        } catch (e) {
+          errorMsg = `Erro no servidor (Status ${resp.status}). Certifique-se que o backend está ativo. Se estiver no Vercel, o backend pode não estar configurado corretamente.`;
+        }
+        throw new Error(errorMsg);
+      }
 
+      const data = await resp.json();
       setMessage({ type: 'success', text: `Senha de ${email} atualizada com sucesso!` });
       setResettingId(null);
       setNewPassword('');
     } catch (error: any) {
       console.error('Password reset error:', error);
       setMessage({ type: 'error', text: error.message });
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.email || !createForm.password || createForm.password.length < 6) {
+      setMessage({ type: 'error', text: 'Preencha todos os campos. A senha deve ter 6+ caracteres.' });
+      return;
+    }
+
+    setCreating(true);
+    try {
+      // 1. Create in Firebase Auth via REST API (server)
+      const resp = await fetch('/api/sync-auth-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          users: [{ email: createForm.email, pass: createForm.password }] 
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || data.results[0].status === 'error') {
+        throw new Error(data.results?.[0]?.message || data.error || 'Falha ao criar usuário na autenticação');
+      }
+
+      // 2. Create Role Record in Firestore
+      const uid = data.results[0].uid;
+      await updateDoc(doc(db, 'userRoles', uid), {
+        uid,
+        name: createForm.name,
+        email: createForm.email,
+        role: createForm.role,
+        schoolId: createForm.schoolId,
+        updatedAt: serverTimestamp()
+      });
+
+      setMessage({ type: 'success', text: `Usuário ${createForm.email} criado com sucesso!` });
+      setShowCreate(false);
+      setCreateForm({ name: '', email: '', password: '', role: 'SchoolOperator', schoolId: '' });
+    } catch (error: any) {
+      console.error('Create error:', error);
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -103,17 +160,106 @@ export default function UsersPage() {
           <p className="text-slate-500 text-sm">Controle de acessos e redefinição de senhas.</p>
         </div>
         
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar usuário..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-          />
+        <div className="flex flex-col md:flex-row items-center gap-3">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar usuário..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+            />
+          </div>
+          <button 
+            onClick={() => setShowCreate(!showCreate)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-sesi-blue text-white rounded-lg font-bold hover:bg-blue-800 transition-all text-xs uppercase"
+          >
+            {showCreate ? <X size={16} /> : <Users size={16} />}
+            {showCreate ? 'Cancelar' : 'Novo Usuário'}
+          </button>
         </div>
       </header>
+
+      {showCreate && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm space-y-4"
+        >
+          <h2 className="font-black text-slate-800 uppercase text-[10px] tracking-widest flex items-center gap-2">
+            <Edit3 size={14} className="text-blue-600" /> Cadastrar Novo Usuário (Acesso ao Sistema)
+          </h2>
+          <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Nome Completo</label>
+              <input 
+                required
+                type="text" 
+                value={createForm.name}
+                onChange={e => setCreateForm({...createForm, name: e.target.value})}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-300 transition-all" 
+                placeholder="Ex: João Silva"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">E-mail / Credencial</label>
+              <input 
+                required
+                type="email" 
+                value={createForm.email}
+                onChange={e => setCreateForm({...createForm, email: e.target.value})}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-300 transition-all" 
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Senha Inicial</label>
+              <input 
+                required
+                type="password" 
+                value={createForm.password}
+                onChange={e => setCreateForm({...createForm, password: e.target.value})}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-300 transition-all" 
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Nível de Acesso</label>
+              <select 
+                value={createForm.role}
+                onChange={e => setCreateForm({...createForm, role: e.target.value})}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-300 transition-all"
+              >
+                <option value="Admin">Administrador Total</option>
+                <option value="SchoolOperator">Operador de Escola</option>
+                <option value="Viewer">Apenas Visualizador</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Unidade (Vínculos)</label>
+              <select 
+                value={createForm.schoolId}
+                onChange={e => setCreateForm({...createForm, schoolId: e.target.value})}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-300 transition-all"
+              >
+                <option value="">Nenhuma Unidade</option>
+                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button 
+                type="submit"
+                disabled={creating}
+                className="w-full bg-sesi-blue text-white rounded-xl py-2.5 font-bold hover:bg-blue-800 transition-all disabled:opacity-50 text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-sesi-blue/20"
+              >
+                {creating ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+                {creating ? 'Processando...' : 'Cadastrar Usuário'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      )}
 
       {message && (
         <div className={`p-4 rounded-xl flex items-center gap-3 ${
