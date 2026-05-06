@@ -86,15 +86,29 @@ export default function SettingsPage() {
             <label htmlFor="showBanner" className="font-bold text-gray-700">Ativar banner no topo do portal</label>
           </div>
           
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-600">Texto do Banner</label>
-            <textarea 
-              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500 outline-none transition-all resize-none font-medium"
-              rows={2}
-              placeholder="Ex: MATRÍCULAS ABERTAS 2025 - VAGAS LIMITADAS!"
-              value={settings.topBannerText}
-              onChange={e => setSettings({...settings, topBannerText: e.target.value})}
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-600">Texto do Banner</label>
+              <textarea 
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500 outline-none transition-all resize-none font-medium text-sm"
+                rows={2}
+                placeholder="Ex: MATRÍCULAS ABERTAS 2025 - VAGAS LIMITADAS!"
+                value={settings.topBannerText}
+                onChange={e => setSettings({...settings, topBannerText: e.target.value})}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-600">URL da Imagem de Campanha (Banner)</label>
+              <input 
+                type="text"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500 outline-none transition-all font-medium text-sm"
+                placeholder="https://exemplo.com/imagem-campanha.jpg"
+                value={settings.bannerImageUrl || ''}
+                onChange={e => setSettings({...settings, bannerImageUrl: e.target.value})}
+              />
+              <p className="text-[10px] text-gray-400 italic">Dica: Recomendamos imagens horizontais de alta resolução (ex: 1920x400).</p>
+            </div>
           </div>
 
           <button 

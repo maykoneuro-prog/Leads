@@ -19,6 +19,7 @@ export interface School {
 export interface AppSettings {
   topBannerText?: string;
   showBanner?: boolean;
+  bannerImageUrl?: string;
 }
 
 export interface Course {

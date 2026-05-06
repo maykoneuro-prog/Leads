@@ -187,9 +187,22 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden font-sans">
       {/* Top Banner */}
-      {settings?.showBanner && settings.topBannerText && (
-        <div className="bg-orange-500 text-white py-3 px-4 text-center text-sm font-bold tracking-tight shadow-sm sticky top-0 z-[60]">
-          {settings.topBannerText}
+      {settings?.showBanner && (
+        <div className="sticky top-0 z-[60] shadow-md w-full">
+          {settings.bannerImageUrl ? (
+            <div className="w-full h-auto overflow-hidden bg-slate-900 leading-[0]">
+              <img 
+                src={settings.bannerImageUrl} 
+                alt="Campanha SESI PE" 
+                className="w-full h-auto object-cover max-h-[300px] md:max-h-[400px]"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          ) : settings.topBannerText ? (
+            <div className="bg-orange-500 text-white py-3 px-4 text-center text-sm font-bold tracking-tight">
+              {settings.topBannerText}
+            </div>
+          ) : null}
         </div>
       )}
 

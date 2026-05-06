@@ -19,10 +19,11 @@
     },
     "AppSettings": {
       "title": "App Settings",
-      "description": "Global configuration like banner text",
+      "description": "Global configuration like banner text and image",
       "type": "object",
       "properties": {
         "topBannerText": { "type": "string" },
+        "bannerImageUrl": { "type": "string", "description": "URL for the campaign banner image" },
         "showBanner": { "type": "boolean" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
