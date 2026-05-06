@@ -23,24 +23,10 @@ export default function LoginPage() {
     let loginEmail = email.includes('@') ? email : `${email.toLowerCase()}@sesipe.com.br`.replace(/\s+/g, '');
 
     try {
-      setLoadingStep('Verificando credenciais...');
-      
-      // If user provided something that definitely isn't an email (no @ and looks like a name)
-      // and we want to support "NAME" login:
-      if (!email.includes('@')) {
-        const q = query(collection(db, 'userRoles'), where('name', '==', email));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const userData = snap.docs[0].data();
-          loginEmail = userData.email;
-          setLoadingStep(`Bem-vindo, ${userData.name}...`);
-        }
-      }
-
       setLoadingStep('Autenticando...');
       // Sign in locally to establish the session for Firestore rules
-      // We skip the /api/login check because it is redundant and 
-      // fails on serverless environments like Vercel without custom backend setup.
+      // We skip the query check here because it causes permission errors 
+      // since unauthenticated users cannot list the userRoles collection.
       await signInWithEmailAndPassword(auth, loginEmail, password);
       
       setLoadingStep('Redirecionando...');
