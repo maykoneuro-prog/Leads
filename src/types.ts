@@ -65,7 +65,8 @@ export interface Lead {
 
 export interface UserRoleRecord {
   uid: string;
+  name?: string;
   email: string;
-  role: UserRole;
+  role: UserRole | 'Admin' | 'SchoolOperator' | 'Viewer';
   schoolId?: string;
 }

@@ -21,10 +21,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const roleDoc = await getDoc(doc(db, 'userRoles', u.uid));
-        if (roleDoc.exists()) {
-          setRoleData(roleDoc.data() as UserRoleRecord);
-        } else {
+        try {
+          const roleDoc = await getDoc(doc(db, 'userRoles', u.uid));
+          if (roleDoc.exists()) {
+            setRoleData(roleDoc.data() as UserRoleRecord);
+          } else {
+            // Auto-promote first user or specific email to Admin if record missing
+            // This is helpful for initial setup or if session is lost
+            const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+            if (adminEmails.includes(u.email || '')) {
+              const defaultAdmin: UserRoleRecord = {
+                uid: u.uid,
+                email: u.email || '',
+                role: 'Admin',
+                name: 'Administrador Principal'
+              };
+              setRoleData(defaultAdmin);
+            } else {
+              setRoleData(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching role data:", error);
           setRoleData(null);
         }
       } else {

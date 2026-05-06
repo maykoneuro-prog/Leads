@@ -7,7 +7,7 @@ import { School as SchoolIcon, BookOpen, Plus, Save, Trash2, MapPin, Phone, Mega
 import { motion } from 'motion/react';
 
 export default function SettingsPage() {
-  const { roleData } = useAuth();
+  const { roleData, loading: authLoading } = useAuth();
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [settings, setSettings] = useState<AppSettings>({ topBannerText: '', showBanner: false });
@@ -15,14 +15,22 @@ export default function SettingsPage() {
   const [savingBanner, setSavingBanner] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (roleData?.role !== 'Admin') return;
+
     const fetchData = async () => {
-      const [schoolSnap, courseSnap] = await Promise.all([
-        getDocs(collection(db, 'schools')),
-        getDocs(collection(db, 'courses'))
-      ]);
-      setSchools(schoolSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as School)));
-      setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
-      setLoading(false);
+      try {
+        const [schoolSnap, courseSnap] = await Promise.all([
+          getDocs(collection(db, 'schools')),
+          getDocs(collection(db, 'courses'))
+        ]);
+        setSchools(schoolSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as School)));
+        setCourses(courseSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Course)));
+      } catch (err) {
+        console.error("Error fetching settings data:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'banner'), (snap) => {
@@ -33,7 +41,7 @@ export default function SettingsPage() {
 
     fetchData();
     return () => unsubSettings();
-  }, []);
+  }, [authLoading, roleData]);
 
   const handleSaveBanner = async () => {
     setSavingBanner(true);
@@ -49,7 +57,8 @@ export default function SettingsPage() {
     }
   };
 
-  if (roleData?.role !== 'Admin') return <div className="p-8 text-center text-gray-500 italic">Apenas administradores podem acessar estas configurações.</div>;
+  if (authLoading) return <div className="p-8 flex items-center justify-center gap-2"><Loader2 className="animate-spin" /> Verificando autenticação...</div>;
+  if (!roleData || roleData.role !== 'Admin') return <div className="p-8 text-center text-gray-500 italic">Apenas administradores podem acessar estas configurações.</div>;
   if (loading) return <div className="p-8 flex items-center justify-center gap-2"><Loader2 className="animate-spin" /> Carregando configurações...</div>;
 
   return (

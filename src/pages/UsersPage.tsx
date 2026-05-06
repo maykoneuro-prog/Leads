@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, updateDoc, doc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Users, Key, AlertCircle, CheckCircle, Search, Loader2 } from 'lucide-react';
+import { Users, Key, AlertCircle, CheckCircle, Search, Loader2, Edit3, X, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface UserRole {
   id: string; // This is the UID
+  name?: string;
   email: string;
   role: string;
   schoolId?: string;
@@ -14,13 +15,21 @@ interface UserRole {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRole[]>([]);
+  const [schools, setSchools] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [editForm, setEditForm] = useState({ name: '', role: '', schoolId: '' });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
+    // Fetch Schools for dropdown
+    getDocs(collection(db, 'schools')).then(snap => {
+      setSchools(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+    });
+
     const q = query(collection(db, 'userRoles'), orderBy('email'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserRole));
@@ -29,6 +38,22 @@ export default function UsersPage() {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleUpdateUser = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'userRoles', id), {
+        name: editForm.name,
+        role: editForm.role,
+        schoolId: editForm.schoolId,
+        updatedAt: serverTimestamp()
+      });
+      setMessage({ type: 'success', text: 'Usuário atualizado com sucesso!' });
+      setEditingId(null);
+    } catch (error: any) {
+      console.error('Update error:', error);
+      setMessage({ type: 'error', text: 'Falha ao atualizar: ' + error.message });
+    }
+  };
 
   const handleResetPassword = async (email: string) => {
     if (!newPassword || newPassword.length < 6) {
@@ -54,6 +79,15 @@ export default function UsersPage() {
       console.error('Password reset error:', error);
       setMessage({ type: 'error', text: error.message });
     }
+  };
+
+  const startEditing = (user: UserRole) => {
+    setEditingId(user.id);
+    setEditForm({
+      name: user.name || '',
+      role: user.role,
+      schoolId: user.schoolId || ''
+    });
   };
 
   const filtered = users.filter(u => 
@@ -125,54 +159,120 @@ export default function UsersPage() {
                       <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
                         <Users size={16} />
                       </div>
-                      <span className="font-medium text-slate-900">{user.email}</span>
+                      <div className="flex flex-col">
+                        {editingId === user.id ? (
+                          <input 
+                            type="text"
+                            value={editForm.name}
+                            onChange={e => setEditForm({...editForm, name: e.target.value})}
+                            className="text-sm font-medium p-1 border border-blue-200 rounded outline-none"
+                            placeholder="Nome Completo"
+                          />
+                        ) : (
+                          <span className="font-bold text-slate-900">{user.name || 'Sem nome'}</span>
+                        )}
+                        <span className="text-xs text-slate-400 font-medium">{user.email}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      user.role === 'Admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                    }`}>
-                      {user.role}
-                    </span>
+                    {editingId === user.id ? (
+                      <select 
+                        value={editForm.role}
+                        onChange={e => setEditForm({...editForm, role: e.target.value})}
+                        className="text-xs font-semibold p-1 border border-blue-200 rounded outline-none"
+                      >
+                        <option value="Admin">Admin</option>
+                        <option value="SchoolOperator">Operador</option>
+                        <option value="Viewer">Visualizador</option>
+                      </select>
+                    ) : (
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        user.role === 'Admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        {user.role}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-slate-600 font-mono text-xs">{user.schoolId || '-'}</span>
+                    {editingId === user.id ? (
+                      <select 
+                        value={editForm.schoolId}
+                        onChange={e => setEditForm({...editForm, schoolId: e.target.value})}
+                        className="text-[10px] font-bold p-1 border border-blue-200 rounded outline-none w-full max-w-[150px]"
+                      >
+                        <option value="">Nenhuma</option>
+                        {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-slate-600 font-mono text-xs">{schools.find(s => s.id === user.schoolId)?.name || user.schoolId || '-'}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                    {editingId === user.id ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleUpdateUser(user.id)}
+                          className="bg-green-600 text-white p-1.5 rounded-lg hover:bg-green-700 transition-colors"
+                          title="Salvar alterações"
+                        >
+                          <Save size={14} />
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="bg-slate-200 text-slate-600 p-1.5 rounded-lg hover:bg-slate-300 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditing(user)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        title="Editar Perfil"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                    )}
+
                     {resettingId === user.id ? (
-                      <div className="flex flex-col md:flex-row items-end md:items-center justify-end gap-2">
+                      <div className="flex items-center gap-2">
                         <input
                           type="password"
                           placeholder="Nova senha"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          className="px-2 py-1 border border-blue-300 rounded text-sm outline-none w-32"
+                          className="px-2 py-1 border border-blue-300 rounded text-sm outline-none w-24"
                         />
                         <div className="flex gap-1">
                           <button
                             onClick={() => handleResetPassword(user.email)}
-                            className="bg-blue-600 text-white p-1 rounded hover:bg-blue-700 transition-colors"
-                            title="Salvar nova senha"
+                            className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                            title="Confirmar Reset"
                           >
                             <Key size={14} />
                           </button>
                           <button
                             onClick={() => { setResettingId(null); setNewPassword(''); }}
-                            className="bg-slate-200 text-slate-600 p-1 rounded hover:bg-slate-300 transition-colors"
+                            className="bg-slate-200 text-slate-600 p-1.5 rounded-lg hover:bg-slate-300 transition-colors"
                           >
-                            <Loader2 size={14} className="rotate-45" />
+                            <X size={14} />
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setResettingId(user.id)}
-                        className="flex items-center gap-1 ml-auto px-3 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all"
-                      >
-                        <Key size={12} />
-                        Redefinir Senha
-                      </button>
+                      !editingId && (
+                        <button
+                          onClick={() => setResettingId(user.id)}
+                          className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
+                          title="Redefinir Senha"
+                        >
+                          <Key size={16} />
+                        </button>
+                      )
                     )}
+                    </div>
                   </td>
                 </tr>
               ))}
