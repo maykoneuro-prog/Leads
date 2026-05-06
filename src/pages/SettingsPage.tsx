@@ -110,13 +110,112 @@ export default function SettingsPage() {
               <p className="text-[10px] text-gray-400 italic">Dica: Recomendamos imagens horizontais de alta resolução (ex: 1920x400).</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Landing Page Content Customization */}
+      <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <BookOpen className="text-blue-600" /> Conteúdo da Landing Page
+        </h2>
+
+        <div className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-600">Título Principal (Headline)</label>
+              <input 
+                type="text"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all font-medium text-sm"
+                placeholder="Ex: Invista no futuro do seu filho"
+                value={settings.heroHeadline || ''}
+                onChange={e => setSettings({...settings, heroHeadline: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-600">Subtítulo</label>
+              <textarea 
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all resize-none font-medium text-sm"
+                rows={3}
+                placeholder="Descrição curta do SESI PE"
+                value={settings.heroSubheadline || ''}
+                onChange={e => setSettings({...settings, heroSubheadline: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-500">Métrica 1 (Valor)</label>
+              <input 
+                type="text"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-sm"
+                placeholder="+12k"
+                value={settings.metric1Value || ''}
+                onChange={e => setSettings({...settings, metric1Value: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-500">Métrica 1 (Título)</label>
+              <input 
+                type="text"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-sm"
+                placeholder="Alunos"
+                value={settings.metric1Label || ''}
+                onChange={e => setSettings({...settings, metric1Label: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-500">Métrica 2 (Valor)</label>
+              <input 
+                type="text"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-sm"
+                placeholder="100%"
+                value={settings.metric2Value || ''}
+                onChange={e => setSettings({...settings, metric2Value: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-500">Métrica 2 (Título)</label>
+              <input 
+                type="text"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-sm"
+                placeholder="Inovação"
+                value={settings.metric2Label || ''}
+                onChange={e => setSettings({...settings, metric2Label: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-orange-600">Título do Alerta</label>
+              <input 
+                type="text"
+                className="w-full p-4 bg-white border border-orange-100 rounded-2xl outline-none focus:border-orange-500 font-bold text-sm"
+                placeholder="VAGAS LIMITADAS"
+                value={settings.alertTitle || ''}
+                onChange={e => setSettings({...settings, alertTitle: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-orange-600">Descrição do Alerta</label>
+              <input 
+                type="text"
+                className="w-full p-4 bg-white border border-orange-100 rounded-2xl outline-none focus:border-orange-500 text-sm"
+                placeholder="Garanta sua vaga..."
+                value={settings.alertDescription || ''}
+                onChange={e => setSettings({...settings, alertDescription: e.target.value})}
+              />
+            </div>
+          </div>
 
           <button 
             onClick={handleSaveBanner}
             disabled={savingBanner}
-            className="flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-[0.98] disabled:opacity-50"
           >
-            {savingBanner ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar Configuração
+            {savingBanner ? <Loader2 className="animate-spin" size={24} /> : <Save size={24} />} 
+            SALVAR TODAS AS ALTERAÇÕES DO PORTAL
           </button>
         </div>
       </section>

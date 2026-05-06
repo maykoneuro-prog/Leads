@@ -20,6 +20,14 @@ export interface AppSettings {
   topBannerText?: string;
   showBanner?: boolean;
   bannerImageUrl?: string;
+  heroHeadline?: string;
+  heroSubheadline?: string;
+  metric1Value?: string;
+  metric1Label?: string;
+  metric2Value?: string;
+  metric2Label?: string;
+  alertTitle?: string;
+  alertDescription?: string;
 }
 
 export interface Course {

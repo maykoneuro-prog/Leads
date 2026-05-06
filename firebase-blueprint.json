@@ -25,6 +25,14 @@
         "topBannerText": { "type": "string" },
         "bannerImageUrl": { "type": "string", "description": "URL for the campaign banner image" },
         "showBanner": { "type": "boolean" },
+        "heroHeadline": { "type": "string" },
+        "heroSubheadline": { "type": "string" },
+        "metric1Value": { "type": "string" },
+        "metric1Label": { "type": "string" },
+        "metric2Value": { "type": "string" },
+        "metric2Label": { "type": "string" },
+        "alertTitle": { "type": "string" },
+        "alertDescription": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
