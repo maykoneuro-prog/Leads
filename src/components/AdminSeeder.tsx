@@ -57,18 +57,21 @@ export default function AdminSeeder() {
       });
       
       const responseText = await authSyncResp.text();
-      if (!authSyncResp.ok) {
+      let authSyncData: any = { results: [] };
+      
+      if (responseText && responseText.trim()) {
         try {
-          const errData = JSON.parse(responseText);
-          throw new Error(errData.error || 'Erro no servidor');
+          authSyncData = JSON.parse(responseText);
         } catch (e) {
-          throw new Error(`Erro ${authSyncResp.status}: ${responseText || 'Resposta vazia'}`);
+          console.error('Failed to parse auth sync response:', responseText);
         }
       }
+
+      if (!authSyncResp.ok) {
+        throw new Error(authSyncData.error || `Erro de rede: ${authSyncResp.status}`);
+      }
       
-      const authSyncData = JSON.parse(responseText);
-        
-        const schoolsData = [
+      const schoolsData = [
         { id: 'sesiibura', name: 'SESI Ibura', city: 'Recife', email: 'sesiibura@sesipe.com.br' },
         { id: 'sesipaulista', name: 'SESI Paulista', city: 'Paulista', email: 'sesipaulista@sesipe.com.br' },
         { id: 'sesivascodagama', name: 'SESI Vasco da Gama', city: 'Recife', email: 'sesivascodagama@sesipe.com.br' },
@@ -89,25 +92,20 @@ export default function AdminSeeder() {
       // Schools
       for (const s of schoolsData) {
         // Default courses for most schools
-        let offeredCourses = ['ensino-fundamental-i', 'ensino-fundamental-ii', 'ensino-medio'];
+        let offeredCourses = ['educacao-infantil', 'ensino-fundamental-i', 'ensino-fundamental-ii', 'ensino-medio', 'eja'];
         
-        // Custom logic for SESI Araripina and others if needed
-        if (s.id === 'sesiararipina') {
-           offeredCourses = ['ensino-fundamental-i', 'ensino-fundamental-ii', 'ensino-medio'];
-        } else {
-           offeredCourses = ['educacao-infantil', 'ensino-fundamental-i', 'ensino-fundamental-ii', 'ensino-medio', 'eja'];
-        }
-
         batch.set(doc(db, 'schools', s.id), {
+          id: s.id,
           name: s.name,
           city: s.city,
           active: true,
           offeredCourses
         }, { merge: true });
 
-        const userData = authSyncData.results.find((r: any) => r.email === s.email);
+        const userData = (authSyncData.results || []).find((r: any) => r.email === s.email);
         if (userData && userData.uid) {
           batch.set(doc(db, 'userRoles', userData.uid), {
+            uid: userData.uid,
             email: s.email,
             role: 'SchoolOperator',
             schoolId: s.id,
@@ -140,15 +138,27 @@ export default function AdminSeeder() {
         }
       ];
 
-      // Explicitly delete 'ensino-religioso' if it exists to avoid confusion
-      batch.delete(doc(db, 'courses', 'ensino-religioso'));
-
       for (const c of courses) {
         const id = c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
         batch.set(doc(db, 'courses', id), {
+          id: id,
           name: c.name,
           grades: c.grades
         }, { merge: true });
+
+        // Auto-create sample offer for Sesi Ibura Ensino Médio 1º Ano
+        if (id === 'ensino-medio') {
+          const offerId = `sesiibura_ensino-medio_1º-Ano`;
+          batch.set(doc(db, 'schoolOffers', offerId), {
+            schoolId: 'sesiibura',
+            courseId: 'ensino-medio',
+            grade: '1º Ano',
+            slots: 50,
+            enrolledCount: 0,
+            active: true,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
       }
 
       await batch.commit();

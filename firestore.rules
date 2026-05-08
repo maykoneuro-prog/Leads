@@ -53,13 +53,17 @@ service cloud.firestore {
     function isValidSchool(data) {
       return data.keys().hasAll(['name', 'city']) &&
              data.name is string && data.name.size() > 0 &&
-             data.city is string && data.city.size() > 0;
+             data.city is string && data.city.size() > 0 &&
+             (data.keys().hasAny(['whatsapp']) ? data.whatsapp is string : true) &&
+             (data.keys().hasAny(['active']) ? data.active is bool : true) &&
+             (data.keys().hasAny(['offeredCourses']) ? data.offeredCourses is list : true);
     }
 
     function isValidCourse(data) {
       return data.keys().hasAll(['name', 'id']) &&
              data.id is string && data.id.size() > 0 &&
-             data.name is string && data.name.size() > 0;
+             data.name is string && data.name.size() > 0 &&
+             (data.keys().hasAny(['grades']) ? data.grades is list : true);
     }
 
     function isValidOffer(data) {
