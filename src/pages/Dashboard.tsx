@@ -10,6 +10,7 @@ import {
 import { Users, School as SchoolIcon, TrendingUp, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import AdminSeeder from '../components/AdminSeeder';
 
 export default function Dashboard() {
   const { roleData, loading: authLoading } = useAuth();
@@ -138,7 +139,7 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           {/* O AdminSeeder é essencial para o primeiro acesso */}
-          {/* <AdminSeeder /> */}
+          <AdminSeeder />
         </div>
       </header>
 

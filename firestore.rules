@@ -26,8 +26,7 @@ service cloud.firestore {
     }
 
     function isMasterAdmin() {
-      return isSignedIn() && 
-             request.auth.token.email_verified == true && (
+      return isSignedIn() && (
                request.auth.token.email == 'administrador@sesipe.com.br' || 
                request.auth.token.email == 'maykon.euro@gmail.com'
              );

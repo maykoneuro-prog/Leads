@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { LogIn, Lock, Mail, AlertCircle, User } from 'lucide-react';
+import { LogIn, Lock, Mail, AlertCircle, User, Chrome } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -24,16 +24,15 @@ export default function LoginPage() {
 
     try {
       setLoadingStep('Autenticando...');
-      // Sign in locally to establish the session for Firestore rules
-      // We skip the query check here because it causes permission errors 
-      // since unauthenticated users cannot list the userRoles collection.
       await signInWithEmailAndPassword(auth, loginEmail, password);
       
       setLoadingStep('Redirecionando...');
       navigate('/admin/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+      if (err.code === 'auth/operation-not-allowed') {
+        setError('O provedor de E-mail/Senha não está totalmente configurado. Verifique se a opção "Senha" está marcada dentro do provedor no Console do Firebase.');
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
         setError('Usuário não cadastrado ou credencial inválida.');
       } else if (err.code === 'auth/wrong-password') {
         setError('Senha incorreta.');
@@ -42,6 +41,23 @@ export default function LoginPage() {
       } else {
         setError(err.message || 'Erro inesperado ao realizar login.');
       }
+    } finally {
+      setLoading(false);
+      setLoadingStep('');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setLoadingStep('Conectando ao Google...');
+    setError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      navigate('/admin/dashboard');
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setError(err.message || 'Erro ao entrar com Google');
     } finally {
       setLoading(false);
       setLoadingStep('');
@@ -68,10 +84,11 @@ export default function LoginPage() {
             <motion.div 
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold flex flex-col gap-2 border border-red-100"
+              className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold border border-red-100"
             >
-              <div className="flex items-center gap-2">
-                <AlertCircle size={16} className="shrink-0" /> {error}
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" /> 
+                <span>{error}</span>
               </div>
             </motion.div>
           )}
@@ -108,23 +125,35 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-sesi-blue text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-800 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 shadow-xl shadow-sesi-blue/20 active:scale-[0.98]"
-          >
-            {loading ? (
-              <>
-                <span>VERIFICANDO...</span>
-                <span className="text-[10px] font-medium opacity-70 tracking-normal">{loadingStep}</span>
-              </>
-            ) : (
-              <span className="flex items-center gap-3"><LogIn size={18} /> Entrar</span>
-            )}
-          </button>
+          <div className="space-y-3">
+            <button 
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-sesi-blue text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-800 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 shadow-xl shadow-sesi-blue/20 active:scale-[0.98]"
+            >
+              {loading ? (
+                <>
+                  <span>VERIFICANDO...</span>
+                  <span className="text-[10px] font-medium opacity-70 tracking-normal">{loadingStep}</span>
+                </>
+              ) : (
+                <span className="flex items-center gap-3"><LogIn size={18} /> Entrar</span>
+              )}
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full py-3.5 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold text-xs uppercase tracking-tight hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
+            >
+              <Chrome size={16} className="text-red-500" />
+              Entrar com Google
+            </button>
+          </div>
         </form>
 
-        <div className="text-center pt-4">
+        <div className="text-center pt-2">
           <a href="/" className="text-xs font-bold text-slate-400 hover:text-sesi-blue transition-colors uppercase tracking-tight block">← Retornar ao site público</a>
         </div>
       </motion.div>
