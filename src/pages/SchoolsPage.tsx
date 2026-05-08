@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { School as SchoolIcon, Edit2, Check, X, Search, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -26,6 +26,7 @@ export default function SchoolsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', city: '', whatsapp: '', offeredCourses: [] as string[] });
+  const [isAdding, setIsAdding] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -53,12 +54,19 @@ export default function SchoolsPage() {
 
   const handleEdit = (school: School) => {
     setEditingId(school.id);
+    setIsAdding(false);
     setEditForm({ 
       name: school.name, 
       city: school.city, 
       whatsapp: school.whatsapp || '',
       offeredCourses: school.offeredCourses || [] 
     });
+  };
+
+  const handleCreate = () => {
+    setEditingId('new');
+    setIsAdding(true);
+    setEditForm({ name: '', city: '', whatsapp: '', offeredCourses: [] });
   };
 
   const toggleCourse = (courseId: string) => {
@@ -73,19 +81,35 @@ export default function SchoolsPage() {
   };
 
   const handleSave = async (id: string) => {
+    if (!editForm.name || !editForm.city) {
+      alert('Nome e cidade são obrigatórios.');
+      return;
+    }
+
     setUpdating(true);
-    const path = `schools/${id}`;
+    const targetId = isAdding ? editForm.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : id;
+    const path = `schools/${targetId}`;
     try {
-      await updateDoc(doc(db, 'schools', id), {
+      const data = {
+        id: targetId,
         name: editForm.name,
         city: editForm.city,
         whatsapp: editForm.whatsapp,
-        offeredCourses: editForm.offeredCourses
-      });
+        offeredCourses: editForm.offeredCourses,
+        active: true
+      };
+
+      if (isAdding) {
+        await setDoc(doc(db, 'schools', targetId), data);
+      } else {
+        await updateDoc(doc(db, 'schools', id), data);
+      }
+      
       setEditingId(null);
+      setIsAdding(false);
     } catch (error) {
-      console.error('Error updating school:', error);
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error('Error saving school:', error);
+      handleFirestoreError(error, OperationType.WRITE, path);
     } finally {
       setUpdating(false);
     }
@@ -118,15 +142,24 @@ export default function SchoolsPage() {
           <p className="text-slate-500 text-sm">Visualize e edite as informações das escolas SESI.</p>
         </div>
         
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar unidade..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-          />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+          >
+            <SchoolIcon size={18} />
+            <span>Adicionar Unidade</span>
+          </button>
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar unidade..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+            />
+          </div>
         </div>
       </header>
 
@@ -141,6 +174,79 @@ export default function SchoolsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {isAdding && (
+                <tr className="bg-blue-50/30">
+                  <td className="px-6 py-4 align-top">
+                    <input
+                      type="text"
+                      placeholder="Nome da Unidade"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                      autoFocus
+                    />
+                  </td>
+                  <td className="px-6 py-4 align-top">
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        placeholder="Cidade"
+                        value={editForm.city}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      />
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-400">WhatsApp</label>
+                        <input
+                          type="text"
+                          placeholder="81988887777"
+                          value={editForm.whatsapp}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, whatsapp: e.target.value.replace(/\D/g, '') }))}
+                          className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {availableCourses.map(course => (
+                          <label 
+                            key={course.id} 
+                            className={`flex items-center gap-2 px-2 py-1 rounded-md border cursor-pointer transition-all text-xs font-semibold ${
+                              editForm.offeredCourses.includes(course.id)
+                                ? 'bg-blue-100 border-blue-300 text-blue-700'
+                                : 'bg-white border-slate-200 text-slate-400'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              className="hidden"
+                              checked={editForm.offeredCourses.includes(course.id)}
+                              onChange={() => toggleCourse(course.id)}
+                            />
+                            {course.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => handleSave('new')}
+                        disabled={updating}
+                        className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {updating ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                      </button>
+                      <button
+                        onClick={() => { setEditingId(null); setIsAdding(false); }}
+                        disabled={updating}
+                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
               {loading ? (
                 <tr>
                   <td colSpan={3} className="px-6 py-12 text-center">

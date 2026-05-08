@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, updateDoc, doc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, updateDoc, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Users, Key, AlertCircle, CheckCircle, Search, Loader2, Edit3, X, Save } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -118,14 +118,14 @@ export default function UsersPage() {
 
       // 2. Create Role Record in Firestore
       const uid = data.results[0].uid;
-      await updateDoc(doc(db, 'userRoles', uid), {
+      await setDoc(doc(db, 'userRoles', uid), {
         uid,
         name: createForm.name,
         email: createForm.email,
         role: createForm.role,
         schoolId: createForm.schoolId,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
 
       setMessage({ type: 'success', text: `Usuário ${createForm.email} criado com sucesso!` });
       setShowCreate(false);

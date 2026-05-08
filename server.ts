@@ -130,9 +130,11 @@ async function startServer() {
   });
 
   app.post("/api/sync-auth-users", async (req, res) => {
+    console.log(`[SYNC] Request received at ${new Date().toISOString()} from ${req.ip}`);
     try {
       const { users } = req.body;
       if (!users || !Array.isArray(users)) {
+        console.warn("[SYNC] Invalid payload: missing or non-array users");
         return res.status(400).json({ error: "Invalid users array" });
       }
 
@@ -140,6 +142,9 @@ async function startServer() {
       
       const results = await Promise.all(users.map(async (u) => {
         try {
+          if (!u.email || !u.pass) {
+            return { email: u.email || 'unknown', status: 'error', message: 'Email or password missing' };
+          }
           const authRes = await authRest.signUp(u.email, u.pass);
           return { email: u.email, uid: authRes.uid, status: 'synced' };
         } catch (e: any) {
@@ -148,6 +153,7 @@ async function startServer() {
         }
       }));
       
+      console.log(`[SYNC] Completed sync for ${users.length} users`);
       res.json({ results });
     } catch (error: any) {
       console.error("[SYNC] Critical Error:", error);

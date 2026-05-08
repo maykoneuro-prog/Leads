@@ -26,10 +26,9 @@ service cloud.firestore {
     }
 
     function isMasterAdmin() {
-      let email = request.auth.token.email.lower();
       return isSignedIn() && (
-               email == 'administrador@sesipe.com.br' || 
-               email == 'maykon.euro@gmail.com'
+               request.auth.token.email.matches('(?i)administrador@sesipe.com.br') || 
+               request.auth.token.email.matches('(?i)maykon.euro@gmail.com')
              );
     }
 
@@ -39,7 +38,11 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isMasterAdmin() || (isSignedIn() && getUserData().role == 'Admin');
+      return isMasterAdmin() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/userRoles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role == 'Admin'
+      );
     }
 
     function isSchoolOperator(schoolId) {

@@ -56,19 +56,22 @@ export default function AdminSeeder() {
         body: JSON.stringify({ users: adminUsers })
       });
       
+      console.log(`Sync Auth Response Status: ${authSyncResp.status}`);
       const responseText = await authSyncResp.text();
-      let authSyncData: any = { results: [] };
       
+      if (!authSyncResp.ok) {
+        console.error('Sync Auth Failed:', authSyncResp.status, responseText);
+        throw new Error(`Erro na sincronização (${authSyncResp.status}): ${responseText.substring(0, 50)}...`);
+      }
+
+      let authSyncData: any = { results: [] };
       if (responseText && responseText.trim()) {
         try {
           authSyncData = JSON.parse(responseText);
         } catch (e) {
           console.error('Failed to parse auth sync response:', responseText);
+          throw new Error('Resposta do servidor não está no formato JSON.');
         }
-      }
-
-      if (!authSyncResp.ok) {
-        throw new Error(authSyncData.error || `Erro de rede: ${authSyncResp.status}`);
       }
       
       const schoolsData = [
