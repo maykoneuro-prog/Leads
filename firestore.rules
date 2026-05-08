@@ -52,14 +52,14 @@ service cloud.firestore {
 
     function isValidSchool(data) {
       return data.keys().hasAll(['name', 'city']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.city is string && data.city.size() > 0 && data.city.size() <= 100;
+             data.name is string && data.name.size() > 0 &&
+             data.city is string && data.city.size() > 0;
     }
 
     function isValidCourse(data) {
       return data.keys().hasAll(['name', 'id']) &&
              data.id is string && data.id.size() > 0 &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 200;
+             data.name is string && data.name.size() > 0;
     }
 
     function isValidOffer(data) {
@@ -74,13 +74,13 @@ service cloud.firestore {
 
     function isValidLead(data) {
       return data.keys().hasAll(['name', 'guardianName', 'email', 'phone', 'schoolId', 'courseId', 'grade', 'status', 'createdAt', 'updatedAt']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.guardianName is string && data.guardianName.size() > 0 && data.guardianName.size() <= 200 &&
-             data.email is string && data.email.size() > 0 && data.email.size() <= 200 &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() <= 60 &&
+             data.name is string && data.name.size() > 0 &&
+             data.guardianName is string && data.guardianName.size() > 0 &&
+             data.email is string && data.email.size() > 0 &&
+             data.phone is string && data.phone.size() > 0 &&
              isValidId(data.schoolId) &&
              isValidId(data.courseId) &&
-             data.grade is string && data.grade.size() > 0 && data.grade.size() <= 100 &&
+             data.grade is string && data.grade.size() > 0 &&
              data.status in ['New', 'Contacted', 'Interested', 'Enrolled', 'Cancelled'] &&
              data.createdAt == request.time &&
              data.updatedAt == request.time;

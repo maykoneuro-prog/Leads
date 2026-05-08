@@ -138,7 +138,7 @@ export default function LandingPage() {
       setSuccess(true);
     } catch (error) {
       console.error(error);
-      setError('Erro ao enviar cadastro. Tente novamente mais tarde.');
+      handleFirestoreError(error, OperationType.WRITE, 'leads');
     } finally {
       setSubmitting(false);
     }

@@ -132,20 +132,26 @@ async function startServer() {
   app.post("/api/sync-auth-users", async (req, res) => {
     try {
       const { users } = req.body;
-      const results = [];
+      if (!users || !Array.isArray(users)) {
+        return res.status(400).json({ error: "Invalid users array" });
+      }
+
+      console.log(`[SYNC] Starting sync for ${users.length} users`);
       
-      for (const u of users) {
+      const results = await Promise.all(users.map(async (u) => {
         try {
           const authRes = await authRest.signUp(u.email, u.pass);
-          results.push({ email: u.email, uid: authRes.uid, status: 'synced' });
+          return { email: u.email, uid: authRes.uid, status: 'synced' };
         } catch (e: any) {
-          results.push({ email: u.email, status: 'error', message: e.message });
+          console.error(`[SYNC] Error syncing ${u.email}:`, e.message);
+          return { email: u.email, status: 'error', message: e.message };
         }
-      }
+      }));
       
       res.json({ results });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("[SYNC] Critical Error:", error);
+      res.status(500).json({ error: error.message || "Unknown server error" });
     }
   });
 

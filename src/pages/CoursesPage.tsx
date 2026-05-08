@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { BookOpen, Plus, Trash2, Edit2, Check, X, Loader2, ListTree } from 'lucide-react';
 
 interface Course {
@@ -50,7 +50,9 @@ export default function CoursesPage() {
     const grades = editForm.grades.split(',').map(g => g.trim()).filter(g => g !== '');
     
     try {
+      const path = `courses/${courseId}`;
       await setDoc(doc(db, 'courses', courseId), {
+        id: courseId,
         name: editForm.name,
         grades: grades
       }, { merge: true });
@@ -59,7 +61,7 @@ export default function CoursesPage() {
       setIsAdding(false);
     } catch (error) {
       console.error('Error saving course:', error);
-      alert('Erro ao salvar nível de ensino');
+      handleFirestoreError(error, OperationType.WRITE, `courses/${courseId}`);
     } finally {
       setUpdating(false);
     }
@@ -68,11 +70,12 @@ export default function CoursesPage() {
   const deleteCourse = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este nível de ensino?')) return;
     setUpdating(true);
+    const path = `courses/${id}`;
     try {
       await deleteDoc(doc(db, 'courses', id));
     } catch (error) {
       console.error('Error deleting course:', error);
-      alert('Erro ao excluir nível de ensino');
+      handleFirestoreError(error, OperationType.DELETE, path);
     } finally {
       setUpdating(false);
     }

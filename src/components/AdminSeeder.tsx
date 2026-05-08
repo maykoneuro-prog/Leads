@@ -55,9 +55,20 @@ export default function AdminSeeder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ users: adminUsers })
       });
-      const authSyncData = await authSyncResp.json();
       
-      const schoolsData = [
+      const responseText = await authSyncResp.text();
+      if (!authSyncResp.ok) {
+        try {
+          const errData = JSON.parse(responseText);
+          throw new Error(errData.error || 'Erro no servidor');
+        } catch (e) {
+          throw new Error(`Erro ${authSyncResp.status}: ${responseText || 'Resposta vazia'}`);
+        }
+      }
+      
+      const authSyncData = JSON.parse(responseText);
+        
+        const schoolsData = [
         { id: 'sesiibura', name: 'SESI Ibura', city: 'Recife', email: 'sesiibura@sesipe.com.br' },
         { id: 'sesipaulista', name: 'SESI Paulista', city: 'Paulista', email: 'sesipaulista@sesipe.com.br' },
         { id: 'sesivascodagama', name: 'SESI Vasco da Gama', city: 'Recife', email: 'sesivascodagama@sesipe.com.br' },

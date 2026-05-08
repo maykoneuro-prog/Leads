@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { School as SchoolIcon, Edit2, Check, X, Search, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -74,6 +74,7 @@ export default function SchoolsPage() {
 
   const handleSave = async (id: string) => {
     setUpdating(true);
+    const path = `schools/${id}`;
     try {
       await updateDoc(doc(db, 'schools', id), {
         name: editForm.name,
@@ -84,7 +85,7 @@ export default function SchoolsPage() {
       setEditingId(null);
     } catch (error) {
       console.error('Error updating school:', error);
-      alert('Erro ao atualizar unidade');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     } finally {
       setUpdating(false);
     }
@@ -93,11 +94,12 @@ export default function SchoolsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta unidade? Esta ação não pode ser desfeita.')) return;
     setUpdating(true);
+    const path = `schools/${id}`;
     try {
       await deleteDoc(doc(db, 'schools', id));
     } catch (error) {
       console.error('Error deleting school:', error);
-      alert('Erro ao excluir unidade');
+      handleFirestoreError(error, OperationType.DELETE, path);
     } finally {
       setUpdating(false);
     }
