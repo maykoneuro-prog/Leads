@@ -1,39 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    
+    // --- Global Safety Net ---
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helper functions ---
+    // --- Helper Primitives ---
+    
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data;
-    }
-
-    function isMasterAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'administrador@sesipe.com.br' || 
-        request.auth.token.email == 'maykon.euro@gmail.com'
-      );
-    }
-
-    function isAdmin() {
-      return isMasterAdmin() || (isSignedIn() && getUserData().role == 'Admin');
-    }
-
-    function isSchoolOperator(schoolId) {
-      return isSignedIn() && 
-        getUserData().role == 'SchoolOperator' && 
-        getUserData().schoolId == schoolId;
-    }
-
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -44,38 +25,62 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // --- Validation Blueprints ---
+    function isMasterAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email_verified == true && (
+               request.auth.token.email == 'administrador@sesipe.com.br' || 
+               request.auth.token.email == 'maykon.euro@gmail.com'
+             );
+    }
+
+    function getUserData() {
+      // Note: get() is expensive for list queries, prefer resource data if possible
+      return get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isMasterAdmin() || (isSignedIn() && getUserData().role == 'Admin');
+    }
+
+    function isSchoolOperator(schoolId) {
+      return isSignedIn() && 
+             getUserData().role == 'SchoolOperator' && 
+             getUserData().schoolId == schoolId;
+    }
+
+    // --- Validation Helpers ---
 
     function isValidSchool(data) {
       return data.keys().hasAll(['name', 'city']) &&
-             data.name is string && data.name.size() <= 200 &&
-             data.city is string && data.city.size() <= 100;
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.city is string && data.city.size() > 0 && data.city.size() <= 100;
     }
 
     function isValidCourse(data) {
-      return data.keys().hasAll(['name']) &&
-             data.name is string && data.name.size() <= 200;
+      return data.keys().hasAll(['name', 'id']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200;
     }
 
     function isValidOffer(data) {
       return data.keys().hasAll(['schoolId', 'courseId', 'grade', 'slots', 'enrolledCount', 'active']) &&
-             data.schoolId is string &&
-             data.courseId is string &&
-             data.grade is string &&
-             data.slots is int &&
-             data.enrolledCount is int &&
+             isValidId(data.schoolId) &&
+             isValidId(data.courseId) &&
+             data.grade is string && data.grade.size() > 0 && data.grade.size() <= 100 &&
+             data.slots is int && data.slots >= 0 &&
+             data.enrolledCount is int && data.enrolledCount >= 0 &&
              data.active is bool;
     }
 
     function isValidLead(data) {
       return data.keys().hasAll(['name', 'guardianName', 'email', 'phone', 'schoolId', 'courseId', 'grade', 'status', 'createdAt', 'updatedAt']) &&
-             data.name is string && data.name.size() <= 200 &&
-             data.guardianName is string && data.guardianName.size() <= 200 &&
-             data.email is string && data.email.size() <= 200 &&
-             data.phone is string && data.phone.size() <= 50 &&
-             data.schoolId is string &&
-             data.courseId is string &&
-             data.grade is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.guardianName is string && data.guardianName.size() > 0 && data.guardianName.size() <= 200 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 200 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() <= 60 &&
+             isValidId(data.schoolId) &&
+             isValidId(data.courseId) &&
+             data.grade is string && data.grade.size() > 0 && data.grade.size() <= 100 &&
              data.status in ['New', 'Contacted', 'Interested', 'Enrolled', 'Cancelled'] &&
              data.createdAt == request.time &&
              data.updatedAt == request.time;
@@ -83,41 +88,46 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
+    // Schools: Publicly readable, admin writeable
     match /schools/{schoolId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create: if isAdmin() && isValidSchool(incoming());
+      allow update: if isAdmin() && isValidSchool(incoming());
+      allow delete: if isAdmin();
     }
 
+    // Courses: Publicly readable, admin writeable
     match /courses/{courseId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create: if isAdmin() && isValidCourse(incoming());
+      allow update: if isAdmin() && isValidCourse(incoming());
+      allow delete: if isAdmin();
     }
 
+    // School Offers: Public can see active ones
     match /schoolOffers/{offerId} {
-      // Public can see active ones to check for vacancies
-      allow list: if isAdmin() || 
-                    (isSignedIn() && isSchoolOperator(resource.data.schoolId)) ||
-                    resource.data.active == true;
+      allow get, list: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId)) || resource.data.active == true;
       
-      allow get: if isAdmin() || 
-                   (isSignedIn() && isSchoolOperator(resource.data.schoolId)) ||
-                   resource.data.active == true;
-
-      allow create: if isAdmin() || (isSignedIn() && isSchoolOperator(incoming().schoolId));
+      allow create: if (isAdmin() || (isSignedIn() && isSchoolOperator(incoming().schoolId))) && isValidOffer(incoming());
       
-      allow update: if isAdmin() || 
-                      (isSignedIn() && isSchoolOperator(existing().schoolId) && incoming().schoolId == existing().schoolId) ||
-                      // Allow landing page to increment enrolledCount
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['enrolledCount', 'updatedAt']) && incoming().enrolledCount == existing().enrolledCount + 1);
+      allow update: if (
+        isAdmin() || 
+        (isSignedIn() && isSchoolOperator(existing().schoolId) && incoming().schoolId == existing().schoolId) ||
+        // Landing page increment enrolledCount
+        (incoming().diff(existing()).affectedKeys().hasOnly(['enrolledCount', 'updatedAt']) && 
+         incoming().enrolledCount == existing().enrolledCount + 1 &&
+         incoming().updatedAt == request.time)
+      ) && isValidOffer(incoming());
       
       allow delete: if isAdmin() || (isSignedIn() && isSchoolOperator(existing().schoolId));
     }
 
+    // Leads: Public create, restricted read/update
     match /leads/{leadId} {
       allow create: if isValidLead(incoming());
       
-      allow get: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId));
-      allow list: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId));
+      // Restricted read
+      allow get, list: if isAdmin() || (isSignedIn() && isSchoolOperator(resource.data.schoolId));
 
       allow update: if (isAdmin() || (isSignedIn() && isSchoolOperator(existing().schoolId))) && 
                       incoming().updatedAt == request.time &&
@@ -126,19 +136,21 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // User Roles: Auth required, admin manage
     match /userRoles/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
+    // Settings: Public read, admin manage
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
+    // Duplicate Phone Map: Public use
     match /leadPhones/{phone} {
-      allow get: if true;
-      allow create: if true;
+      allow get, create: if true;
       allow delete: if isAdmin();
     }
   }

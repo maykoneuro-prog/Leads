@@ -42,10 +42,10 @@ export default function LeadManagement() {
       setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Course)));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'courses'));
 
-    // Dynamic leads data
-    let leadQuery = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
+    // Dynamic leads data (Limited to 500 for performance)
+    let leadQuery = query(collection(db, 'leads'), orderBy('createdAt', 'desc'), limit(500));
     if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
-      leadQuery = query(collection(db, 'leads'), where('schoolId', '==', roleData.schoolId), orderBy('createdAt', 'desc'));
+      leadQuery = query(collection(db, 'leads'), where('schoolId', '==', roleData.schoolId), orderBy('createdAt', 'desc'), limit(500));
     }
 
     const unsubscribeLeads = onSnapshot(leadQuery, (snap) => {
@@ -148,7 +148,7 @@ export default function LeadManagement() {
     }
   };
 
-  const filteredLeads = leads.filter(l => {
+  const filteredLeads = React.useMemo(() => leads.filter(l => {
     const matchesSearch = l.name.toLowerCase().includes(filter.toLowerCase()) || 
                           l.email.toLowerCase().includes(filter.toLowerCase()) ||
                           l.phone.includes(filter);
@@ -156,7 +156,7 @@ export default function LeadManagement() {
     const matchesSchool = schoolFilter === '' || l.schoolId === schoolFilter;
     const matchesCourse = courseFilter === '' || l.courseId === courseFilter;
     return matchesSearch && matchesStatus && matchesSchool && matchesCourse;
-  });
+  }), [leads, filter, statusFilter, schoolFilter, courseFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

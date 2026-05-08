@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, getDocs, where, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { Lead, School, Course, SchoolOffer } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line 
+  PieChart, Pie, Cell 
 } from 'recharts';
-import { Users, School as SchoolIcon, BookOpen, Clock, TrendingUp, GraduationCap } from 'lucide-react';
+import { Users, School as SchoolIcon, TrendingUp, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import AdminSeeder from '../components/AdminSeeder';
 
 export default function Dashboard() {
   const { roleData } = useAuth();
@@ -18,68 +17,80 @@ export default function Dashboard() {
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState({ totalLeads: 0, totalSlots: 0, totalEnrolled: 0, enrolledLeads: 0 });
 
   useEffect(() => {
     if (!roleData) return;
 
     const fetchData = async () => {
       try {
-        let leadQuery = collection(db, 'leads');
+        setLoading(true);
+        let leadBaseQuery = collection(db, 'leads');
         let offerQuery = collection(db, 'schoolOffers');
         
         if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
-          leadQuery = query(leadQuery, where('schoolId', '==', roleData.schoolId)) as any;
+          leadBaseQuery = query(leadBaseQuery, where('schoolId', '==', roleData.schoolId)) as any;
           offerQuery = query(offerQuery, where('schoolId', '==', roleData.schoolId)) as any;
         }
-        
+
+        // 1. Precise Counts (Fast & Low Data)
+        const [totalLeadsCount, enrolledLeadsCount] = await Promise.all([
+          getCountFromServer(leadBaseQuery),
+          getCountFromServer(query(leadBaseQuery, where('status', '==', 'Enrolled')))
+        ]);
+
+        // 2. Fetch Data for Charts and Lists (Limited)
         const [leadSnap, schoolSnap, courseSnap, offerSnap] = await Promise.all([
-          getDocs(leadQuery).catch(e => handleFirestoreError(e, OperationType.LIST, 'leads')),
+          getDocs(query(leadBaseQuery, orderBy('createdAt', 'desc'), limit(500))).catch(e => handleFirestoreError(e, OperationType.LIST, 'leads')),
           getDocs(collection(db, 'schools')).catch(e => handleFirestoreError(e, OperationType.LIST, 'schools')),
           getDocs(collection(db, 'courses')).catch(e => handleFirestoreError(e, OperationType.LIST, 'courses')),
           getDocs(offerQuery).catch(e => handleFirestoreError(e, OperationType.LIST, 'schoolOffers'))
         ]) as any;
 
-        setLeads(leadSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Lead)));
+        const currentLeads = leadSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Lead));
+        const currentOffers = offerSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as SchoolOffer));
+
+        setLeads(currentLeads);
         setSchools(schoolSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as School)));
         setCourses(courseSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Course)));
-        const currentOffers = offerSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as SchoolOffer));
         
-        setStats({
+        setCounts({
+          totalLeads: totalLeadsCount.data().count,
+          enrolledLeads: enrolledLeadsCount.data().count,
           totalSlots: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.slots, 0),
           totalEnrolled: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.enrolledCount, 0),
         });
 
-        setLoading(false);
       } catch (error) {
         console.error('Dashboard Fetch Error:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
   }, [roleData]);
 
-  const [stats, setStats] = useState({ totalSlots: 0, totalEnrolled: 0 });
-
-  if (loading) return <div className="text-gray-500 animate-pulse">Carregando métricas...</div>;
-
-  // Process data for charts
-  const statusData = [
+  // Memoize chart data to prevent recalculation on every render
+  const statusData = React.useMemo(() => [
     { name: 'Novo', value: leads.filter(l => l.status === 'New').length },
     { name: 'Contatado', value: leads.filter(l => l.status === 'Contacted').length },
     { name: 'Interessado', value: leads.filter(l => l.status === 'Interested').length },
     { name: 'Matriculado', value: leads.filter(l => l.status === 'Enrolled').length },
     { name: 'Cancelado', value: leads.filter(l => l.status === 'Cancelled').length },
-  ];
+  ], [leads]);
 
-  const schoolData = schools.map(s => ({
+  const schoolData = React.useMemo(() => schools.map(s => ({
     name: s.name,
     leads: leads.filter(l => l.schoolId === s.id).length
-  })).sort((a, b) => b.leads - a.leads);
+  })).sort((a, b) => b.leads - a.leads).slice(0, 5), [schools, leads]);
 
-  const courseData = courses.map(c => ({
+  const courseData = React.useMemo(() => courses.map(c => ({
     name: c.name,
     leads: leads.filter(l => l.courseId === c.id).length
-  }));
+  })), [courses, leads]);
+
+  if (loading) return <div className="text-gray-500 animate-pulse p-8">Carregando métricas estratégicas...</div>;
 
   const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#6366f1', '#ef4444'];
 
@@ -110,16 +121,14 @@ export default function Dashboard() {
           <p className="text-slate-500">Consolidado de todas as unidades SESI Pernambuco</p>
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm transition-colors">Exportar Dados</button>
+          {/* <AdminSeeder /> */}
         </div>
       </header>
 
-      <AdminSeeder />
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total de Interesses" value={leads.length} icon={Users} color="text-slate-800" details={`${leads.length > 0 ? '+12% este mês' : 'Iniciando captação'}`} />
-        <StatCard title="Ocupação de Vagas" value={stats.totalEnrolled} icon={TrendingUp} color="text-sesi-blue" details={`De ${stats.totalSlots} vagas ofertadas`} />
-        <StatCard title="Matriculados" value={leads.filter(l => l.status === 'Enrolled').length} icon={GraduationCap} color="text-green-600" details={`${leads.length > 0 ? ((leads.filter(l => l.status === 'Enrolled').length / leads.length) * 100).toFixed(1) : 0}% de conversão`} />
+        <StatCard title="Total de Interesses" value={counts.totalLeads} icon={Users} color="text-slate-800" details={`${counts.totalLeads > 0 ? 'Base histórica total' : 'Iniciando captação'}`} />
+        <StatCard title="Ocupação de Vagas" value={counts.totalEnrolled} icon={TrendingUp} color="text-sesi-blue" details={`De ${counts.totalSlots} vagas ofertadas`} />
+        <StatCard title="Matriculados" value={counts.enrolledLeads} icon={GraduationCap} color="text-green-600" details={`${counts.totalLeads > 0 ? ((counts.enrolledLeads / counts.totalLeads) * 100).toFixed(1) : 0}% de conversão`} />
         <StatCard title="Unidades Ativas" value={schools.length} icon={SchoolIcon} color="text-slate-400" details={`Rede SESI Pernambuco`} />
       </div>
 
