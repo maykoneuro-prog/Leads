@@ -13,15 +13,25 @@ import { cn } from '../lib/utils';
 import AdminSeeder from '../components/AdminSeeder';
 
 export default function Dashboard() {
-  const { roleData, loading: authLoading } = useAuth();
+  const { user, roleData, loading: authLoading } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [counts, setCounts] = useState({ totalLeads: 0, totalSlots: 0, totalEnrolled: 0, enrolledLeads: 0 });
 
+  const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+  const isMaster = user?.email && adminEmails.includes(user.email.toLowerCase());
+
   useEffect(() => {
-    if (authLoading || !roleData) return;
+    if (authLoading) return;
+    
+    // If not master and no role data, we can't fetch database content safely
+    if (!roleData && !isMaster) {
+      setLoading(false);
+      return;
+    }
 
     const fetchData = async () => {
       try {
@@ -29,9 +39,10 @@ export default function Dashboard() {
         let leadBaseQuery = collection(db, 'leads');
         let offerQuery = collection(db, 'schoolOffers');
         
-        if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
-          leadBaseQuery = query(leadBaseQuery, where('schoolId', '==', roleData.schoolId)) as any;
-          offerQuery = query(offerQuery, where('schoolId', '==', roleData.schoolId)) as any;
+        if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
+          const sId = roleData.schoolId;
+          leadBaseQuery = query(leadBaseQuery, where('schoolId', '==', sId)) as any;
+          offerQuery = query(offerQuery, where('schoolId', '==', sId)) as any;
         }
 
         // 1. Precise Counts (Fast & Low Data)
@@ -73,6 +84,7 @@ export default function Dashboard() {
 
       } catch (error) {
         console.error('Dashboard Fetch Error:', error);
+        setFetchError('Ocorreu um erro ao carregar os dados. Verifique sua conexão ou permissões.');
       } finally {
         setLoading(false);
       }
@@ -100,14 +112,30 @@ export default function Dashboard() {
     leads: leads.filter(l => l.courseId === c.id).length
   })), [courses, leads]);
 
-  if (authLoading) return <div className="text-gray-500 animate-pulse p-8 font-sans">Verificando credenciais...</div>;
-  if (!roleData) return (
-    <div className="p-8 text-center bg-white rounded-xl border border-slate-200 mt-10 max-w-md mx-auto">
-      <h2 className="text-xl font-bold text-slate-800 mb-2">Acesso Restrito</h2>
-      <p className="text-slate-500">Seu usuário não possui permissão para acessar o dashboard administrativo.</p>
+  if (authLoading) return (
+    <div className="min-h-[400px] flex flex-col items-center justify-center p-8 font-sans">
+      <div className="w-12 h-12 border-4 border-sesi-blue border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 font-medium">Verificando credenciais...</p>
     </div>
   );
-  if (loading) return <div className="text-gray-500 animate-pulse p-8 font-sans text-center mt-20">Carregando métricas estratégicas...</div>;
+
+  if (!roleData && !isMaster) return (
+    <div className="p-8 text-center bg-white rounded-xl border border-slate-200 mt-10 max-w-md mx-auto font-sans shadow-sm">
+      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+        <Users size={32} />
+      </div>
+      <h2 className="text-xl font-bold text-slate-800 mb-2">Acesso Restrito</h2>
+      <p className="text-slate-500 leading-relaxed">Seu usuário não possui permissão vinculada a nenhuma unidade ou perfil administrativo.</p>
+      {isMaster && <div className="mt-6 border-t pt-6"><AdminSeeder /></div>}
+    </div>
+  );
+
+  if (loading) return (
+    <div className="min-h-[400px] flex flex-col items-center justify-center p-8 font-sans">
+      <div className="w-12 h-12 border-4 border-sesi-blue border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 font-medium tracking-tight">Carregando métricas estratégicas...</p>
+    </div>
+  );
 
   const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#6366f1', '#ef4444'];
 
@@ -142,6 +170,13 @@ export default function Dashboard() {
           <AdminSeeder />
         </div>
       </header>
+      
+      {fetchError && (
+        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-amber-800 text-sm flex items-center gap-3">
+          <TrendingUp className="shrink-0" />
+          <p>Alguns dados podem estar incompletos enquanto os índices do banco de dados são processados. Tente atualizar em alguns instantes.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total de Interesses" value={counts.totalLeads} icon={Users} color="text-slate-800" details={`${counts.totalLeads > 0 ? 'Base histórica total' : 'Iniciando captação'}`} />

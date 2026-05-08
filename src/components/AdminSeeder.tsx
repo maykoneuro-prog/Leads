@@ -11,7 +11,8 @@ export default function AdminSeeder() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isMasterAdmin = user?.email === 'administrador@sesipe.com.br' || user?.email === 'maykon.euro@gmail.com';
+  const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+  const isMasterAdmin = user?.email && adminEmails.includes(user.email.toLowerCase());
 
   if (!isMasterAdmin) return null;
 

@@ -28,9 +28,13 @@ export default function LeadManagement() {
   });
 
   useEffect(() => {
-    if (!roleData) return;
-    if (roleData.role === 'SchoolOperator') {
-      setSchoolFilter(roleData.schoolId || '');
+    const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+    const isMaster = authUser?.email && adminEmails.includes(authUser.email.toLowerCase());
+
+    if (!roleData && !isMaster) return;
+    
+    if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
+      setSchoolFilter(roleData.schoolId);
     }
 
     // Static data (schools/courses)
@@ -44,8 +48,9 @@ export default function LeadManagement() {
 
     // Dynamic leads data (Limited to 500 for performance)
     let leadQuery = query(collection(db, 'leads'), orderBy('createdAt', 'desc'), limit(500));
-    if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
-      leadQuery = query(collection(db, 'leads'), where('schoolId', '==', roleData.schoolId), orderBy('createdAt', 'desc'), limit(500));
+    if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
+      const sId = roleData.schoolId;
+      leadQuery = query(collection(db, 'leads'), where('schoolId', '==', sId), orderBy('createdAt', 'desc'), limit(500));
     }
 
     const unsubscribeLeads = onSnapshot(leadQuery, (snap) => {

@@ -26,9 +26,10 @@ service cloud.firestore {
     }
 
     function isMasterAdmin() {
+      let email = request.auth.token.email.lower();
       return isSignedIn() && (
-               request.auth.token.email == 'administrador@sesipe.com.br' || 
-               request.auth.token.email == 'maykon.euro@gmail.com'
+               email == 'administrador@sesipe.com.br' || 
+               email == 'maykon.euro@gmail.com'
              );
     }
 
