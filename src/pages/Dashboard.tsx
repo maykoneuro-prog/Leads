@@ -12,7 +12,7 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export default function Dashboard() {
-  const { roleData } = useAuth();
+  const { roleData, loading: authLoading } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [counts, setCounts] = useState({ totalLeads: 0, totalSlots: 0, totalEnrolled: 0, enrolledLeads: 0 });
 
   useEffect(() => {
-    if (!roleData) return;
+    if (authLoading || !roleData) return;
 
     const fetchData = async () => {
       try {
@@ -34,10 +34,19 @@ export default function Dashboard() {
         }
 
         // 1. Precise Counts (Fast & Low Data)
-        const [totalLeadsCount, enrolledLeadsCount] = await Promise.all([
-          getCountFromServer(leadBaseQuery),
-          getCountFromServer(query(leadBaseQuery, where('status', '==', 'Enrolled')))
-        ]);
+        // Wrapped in try/catch to avoid blocking the whole page if count fails (e.g. missing index)
+        let totalLeads = 0;
+        let enrolledLeads = 0;
+        try {
+          const [totalLeadsCount, enrolledLeadsCount] = await Promise.all([
+            getCountFromServer(leadBaseQuery),
+            getCountFromServer(query(leadBaseQuery, where('status', '==', 'Enrolled')))
+          ]);
+          totalLeads = totalLeadsCount.data().count;
+          enrolledLeads = enrolledLeadsCount.data().count;
+        } catch (e) {
+          console.warn("Count query failed (likely missing index):", e);
+        }
 
         // 2. Fetch Data for Charts and Lists (Limited)
         const [leadSnap, schoolSnap, courseSnap, offerSnap] = await Promise.all([
@@ -55,8 +64,8 @@ export default function Dashboard() {
         setCourses(courseSnap.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as object) } as Course)));
         
         setCounts({
-          totalLeads: totalLeadsCount.data().count,
-          enrolledLeads: enrolledLeadsCount.data().count,
+          totalLeads: totalLeads || currentLeads.length,
+          enrolledLeads: enrolledLeads || currentLeads.filter(l => l.status === 'Enrolled').length,
           totalSlots: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.slots, 0),
           totalEnrolled: currentOffers.reduce((acc: number, curr: SchoolOffer) => acc + curr.enrolledCount, 0),
         });
@@ -90,7 +99,14 @@ export default function Dashboard() {
     leads: leads.filter(l => l.courseId === c.id).length
   })), [courses, leads]);
 
-  if (loading) return <div className="text-gray-500 animate-pulse p-8">Carregando métricas estratégicas...</div>;
+  if (authLoading) return <div className="text-gray-500 animate-pulse p-8 font-sans">Verificando credenciais...</div>;
+  if (!roleData) return (
+    <div className="p-8 text-center bg-white rounded-xl border border-slate-200 mt-10 max-w-md mx-auto">
+      <h2 className="text-xl font-bold text-slate-800 mb-2">Acesso Restrito</h2>
+      <p className="text-slate-500">Seu usuário não possui permissão para acessar o dashboard administrativo.</p>
+    </div>
+  );
+  if (loading) return <div className="text-gray-500 animate-pulse p-8 font-sans text-center mt-20">Carregando métricas estratégicas...</div>;
 
   const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#6366f1', '#ef4444'];
 
@@ -121,6 +137,7 @@ export default function Dashboard() {
           <p className="text-slate-500">Consolidado de todas as unidades SESI Pernambuco</p>
         </div>
         <div className="flex gap-2">
+          {/* O AdminSeeder é essencial para o primeiro acesso */}
           {/* <AdminSeeder /> */}
         </div>
       </header>
