@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, where, orderBy, updateDoc, doc, deleteDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { collection, query, onSnapshot, where, orderBy, updateDoc, doc, deleteDoc, serverTimestamp, arrayUnion, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { Lead, School, Course, SchoolOffer } from '../types';
@@ -8,7 +8,7 @@ import { formatDate, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function LeadManagement() {
-  const { roleData, user: authUser } = useAuth();
+  const { roleData, user: authUser, loading: authLoading } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -28,10 +28,15 @@ export default function LeadManagement() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
+    
     const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
     const isMaster = authUser?.email && adminEmails.includes(authUser.email.toLowerCase());
 
-    if (!roleData && !isMaster) return;
+    if (!roleData && !isMaster) {
+      setLoading(false);
+      return;
+    }
     
     if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
       setSchoolFilter(roleData.schoolId);
@@ -185,7 +190,14 @@ export default function LeadManagement() {
     }
   };
 
-  if (loading) return <div className="text-slate-500 animate-pulse">Carregando base de leads...</div>;
+  if (authLoading || (loading && leads.length === 0)) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <Loader2 className="animate-spin text-sesi-blue" size={32} />
+      <p className="text-slate-500 font-medium animate-pulse">Carregando base de leads...</p>
+    </div>
+  );
+
+  if (!authUser) return <div className="p-8 text-center bg-white rounded-xl border border-slate-200">Por favor, faça login para acessar os leads.</div>;
 
   return (
     <div className="space-y-6">

@@ -16,6 +16,11 @@ async function startServer() {
 
   app.use(express.json());
 
+  app.use("/api/*", (req, res, next) => {
+    console.log(`[API] ${req.method} ${req.originalUrl} - From: ${req.ip}`);
+    next();
+  });
+
   let db_admin: admin.firestore.Firestore | null = null;
 
   try {
