@@ -112,6 +112,26 @@ export default function Dashboard() {
     leads: leads.filter(l => l.courseId === c.id).length
   })), [courses, leads]);
 
+  const handleClearData = async () => {
+    if (!confirm('Deseja realmente apagar todos os dados antigos (leads e logs)? Esta ação não pode ser desfeita.')) return;
+    
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/clear-system-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erro ao limpar dados');
+      alert('Sistema resetado com sucesso!');
+      window.location.reload();
+    } catch (e: any) {
+      alert('Erro: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) return (
     <div className="min-h-[400px] flex flex-col items-center justify-center p-8 font-sans">
       <div className="w-12 h-12 border-4 border-sesi-blue border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -165,7 +185,18 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Dashboard Estratégico</h1>
           <p className="text-slate-500">Consolidado de todas as unidades SESI Pernambuco</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {roleData?.role === 'Admin' && (
+             <button 
+                onClick={handleClearData}
+                disabled={loading}
+                className="px-4 py-2.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold hover:bg-red-100 transition-colors uppercase flex items-center gap-2 border border-red-100"
+                title="Limpar todos os leads e logs"
+             >
+                <TrendingUp size={14} className="rotate-180" />
+                Resetar Dados
+             </button>
+          )}
           {/* O AdminSeeder é essencial para o primeiro acesso */}
           <AdminSeeder />
         </div>

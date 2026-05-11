@@ -11,6 +11,8 @@ export default function Header() {
 
   const handleLogout = async () => {
     await signOut(auth);
+    localStorage.clear();
+    sessionStorage.clear();
     navigate('/login');
   };
 

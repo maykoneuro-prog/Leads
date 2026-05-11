@@ -4,8 +4,8 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
 import fs from "fs";
+import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,21 +14,13 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors());
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
-  // CORS / OPTIONS support
+  // Log every single request to debug 405 errors
   app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-    res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-    next();
-  });
-
-  app.use("/api", (req, res, next) => {
-    console.log(`[API] ${req.method} ${req.url} (Original: ${req.originalUrl}) - From: ${req.ip}`);
+    console.log(`[HTTP] ${req.method} ${req.url} (Original: ${req.originalUrl}) - From: ${req.ip}`);
     next();
   });
 
@@ -133,10 +125,8 @@ async function startServer() {
 
   // ... (autoSeed removed or simplified) ...
 
-  // API Router
-  const apiRouter = express.Router();
-
-  apiRouter.get("/health", (req, res) => {
+  // API Routes directly on app
+  app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
       firebaseAdmin: !!db_admin,
@@ -144,7 +134,25 @@ async function startServer() {
     });
   });
 
-  apiRouter.post("/sync-auth-users", async (req, res) => {
+  app.post("/api/clear-system-data", async (req, res) => {
+    try {
+      if (!db_admin) throw new Error("Firestore Admin not initialized");
+      
+      const leadSnap = await db_admin.collection('leads').get();
+      const logSnap = await db_admin.collection('leadLogs').get();
+      
+      const batch = db_admin.batch();
+      leadSnap.docs.forEach(doc => batch.delete(doc.ref));
+      logSnap.docs.forEach(doc => batch.delete(doc.ref));
+      
+      await batch.commit();
+      res.json({ success: true, message: "Leads and logs cleared" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/sync-auth-users", async (req, res) => {
     console.log(`[SYNC] Request received at ${new Date().toISOString()} from ${req.ip}`);
     try {
       const { users } = req.body;
@@ -176,7 +184,7 @@ async function startServer() {
     }
   });
 
-  apiRouter.post("/login", async (req, res) => {
+  app.post("/api/login", async (req, res) => {
     const { email, password } = req.body;
     try {
       const userData = await authRest.signIn(email, password);
@@ -186,7 +194,7 @@ async function startServer() {
     }
   });
 
-  apiRouter.post("/reset-password", async (req, res) => {
+  app.post("/api/reset-password", async (req, res) => {
     try {
       const { email, newPassword } = req.body;
       await authRest.updatePassword(email, newPassword);
@@ -197,15 +205,13 @@ async function startServer() {
   });
 
   // Catch-all for API that didn't match any route
-  apiRouter.all("*", (req, res) => {
+  app.all("/api/*", (req, res) => {
+    console.warn(`[API] Unhandled ${req.method} ${req.originalUrl}`);
     res.status(404).json({ 
       error: `Endpoint não encontrado ou método não permitido: ${req.method} ${req.originalUrl}`,
       availableEndpoints: ["/api/health", "/api/sync-auth-users", "/api/login", "/api/reset-password"]
     });
   });
-
-  // Mount the router
-  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
