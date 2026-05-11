@@ -91,7 +91,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, [roleData]);
+  }, [roleData, authLoading, isMaster]);
 
   // Memoize chart data to prevent recalculation on every render
   const statusData = React.useMemo(() => [

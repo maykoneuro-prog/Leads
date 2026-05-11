@@ -68,7 +68,7 @@ export default function LeadManagement() {
       unsubCourses();
       unsubscribeLeads();
     };
-  }, [roleData]);
+  }, [roleData, authLoading, authUser]);
 
   const addLog = async (leadId: string, action: string, comment?: string) => {
     if (!authUser || !roleData) return;

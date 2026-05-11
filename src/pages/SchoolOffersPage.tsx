@@ -26,7 +26,14 @@ export default function SchoolOffersPage() {
   });
 
   useEffect(() => {
-    if (!roleData) return;
+    // Add auth check inside effect
+    const adminEmails = ['maykon.euro@gmail.com', 'administrador@sesipe.com.br'];
+    const isMaster = user?.email && adminEmails.includes(user.email.toLowerCase());
+
+    if (!roleData && !isMaster) {
+      if (user) setLoading(false); // If we have user but no role, stop loading
+      return;
+    }
 
     // Load Courses and Schools (for Admin)
     const loadBasics = async () => {
@@ -38,7 +45,7 @@ export default function SchoolOffersPage() {
       setSchools(schoolsSnap.docs.map(d => ({ id: d.id, ...d.data() } as School)));
       
       // Default school if operator
-      if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
+      if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
         setNewOffer(prev => ({ ...prev, schoolId: roleData.schoolId! }));
       }
     };
@@ -46,7 +53,7 @@ export default function SchoolOffersPage() {
 
     // Subscribe to Offers
     let q = query(collection(db, 'schoolOffers'));
-    if (roleData.role === 'SchoolOperator' && roleData.schoolId) {
+    if (roleData?.role === 'SchoolOperator' && roleData?.schoolId) {
       q = query(collection(db, 'schoolOffers'), where('schoolId', '==', roleData.schoolId));
     }
 
@@ -58,7 +65,7 @@ export default function SchoolOffersPage() {
     });
 
     return () => unsubscribe();
-  }, [roleData]);
+  }, [roleData, user]);
 
   const handleAddOffer = async () => {
     if (!newOffer.schoolId || !newOffer.courseId || !newOffer.grade) {
