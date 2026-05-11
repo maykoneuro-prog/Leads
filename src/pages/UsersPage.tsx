@@ -72,18 +72,22 @@ export default function UsersPage() {
         body: JSON.stringify({ email, newPassword })
       });
 
-      if (!resp.ok) {
-        let errorMsg = 'Falha ao atualizar senha';
-        try {
-          const data = await resp.json();
-          errorMsg = data.error || errorMsg;
-        } catch (e) {
-          errorMsg = `Erro no servidor (Status ${resp.status}). Certifique-se que o backend está ativo. Se estiver no Vercel, o backend pode não estar configurado corretamente.`;
-        }
-        throw new Error(errorMsg);
+      const text = await resp.text();
+      if (!text || text.trim() === '') {
+        throw new Error(`Servidor retornou resposta vazia (Status ${resp.status}).`);
       }
 
-      const data = await resp.json();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Resposta do servidor não é um JSON válido: ${text.substring(0, 50)}...`);
+      }
+
+      if (!resp.ok) {
+        throw new Error(data.error || `Falha ao atualizar senha (Status ${resp.status})`);
+      }
+
       setMessage({ type: 'success', text: `Senha de ${email} atualizada com sucesso!` });
       setResettingId(null);
       setNewPassword('');
@@ -102,18 +106,32 @@ export default function UsersPage() {
 
     setCreating(true);
     try {
+      const emailFixed = createForm.email.trim();
       // 1. Create in Firebase Auth via REST API (server)
       const resp = await fetch('/api/sync-auth-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          users: [{ email: createForm.email, pass: createForm.password }] 
+          users: [{ email: emailFixed, pass: createForm.password }] 
         })
       });
 
-      const data = await resp.json();
-      if (!resp.ok || data.results[0].status === 'error') {
-        throw new Error(data.results?.[0]?.message || data.error || 'Falha ao criar usuário na autenticação');
+      const text = await resp.text();
+      if (!text || text.trim() === '') {
+        throw new Error(`O servidor retornou uma resposta vazia (Status ${resp.status}).`);
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON:', text);
+        throw new Error(`Resposta do servidor não é um JSON válido: ${text.substring(0, 100)}...`);
+      }
+
+      if (!resp.ok || !data.results || data.results[0].status === 'error') {
+        const errorDetail = data.results?.[0]?.message || data.error || 'Falha desconhecida no servidor';
+        throw new Error(`Erro na criação: ${errorDetail}`);
       }
 
       // 2. Create Role Record in Firestore
@@ -121,7 +139,7 @@ export default function UsersPage() {
       await setDoc(doc(db, 'userRoles', uid), {
         uid,
         name: createForm.name,
-        email: createForm.email,
+        email: emailFixed,
         role: createForm.role,
         schoolId: createForm.schoolId,
         updatedAt: serverTimestamp()

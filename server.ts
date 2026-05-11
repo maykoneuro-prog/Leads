@@ -135,7 +135,7 @@ async function startServer() {
   });
 
   app.post("/api/sync-auth-users", async (req, res) => {
-    console.log(`[SYNC] Request received at ${new Date().toISOString()} from ${req.ip}`);
+    console.log(`[SYNC] Request received from ${req.ip}`);
     try {
       const { users } = req.body;
       if (!users || !Array.isArray(users)) {
@@ -143,7 +143,14 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid users array" });
       }
 
-      console.log(`[SYNC] Starting sync for ${users.length} users`);
+      // Basic validation for each user
+      for (const u of users) {
+        if (u.email && u.email.includes(' ')) {
+          return res.status(400).json({ error: `Email inválido: contém espaços (${u.email})` });
+        }
+      }
+
+      console.log(`[SYNC] Starting sync for ${users.length} users:`, users.map(u => u.email));
       
       const results = await Promise.all(users.map(async (u) => {
         try {
