@@ -16,8 +16,19 @@ async function startServer() {
 
   app.use(express.json());
 
+  // CORS / OPTIONS support
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+    next();
+  });
+
   app.use("/api", (req, res, next) => {
-    console.log(`[API] ${req.method} ${req.url} (Full: ${req.originalUrl}) - From: ${req.ip}`);
+    console.log(`[API] ${req.method} ${req.url} (Original: ${req.originalUrl}) - From: ${req.ip}`);
     next();
   });
 
@@ -122,7 +133,10 @@ async function startServer() {
 
   // ... (autoSeed removed or simplified) ...
 
-  app.get("/api/health", (req, res) => {
+  // API Router
+  const apiRouter = express.Router();
+
+  apiRouter.get("/health", (req, res) => {
     res.json({ 
       status: "ok", 
       firebaseAdmin: !!db_admin,
@@ -130,20 +144,14 @@ async function startServer() {
     });
   });
 
-  app.post("/api/seed-system", async (req, res) => {
-    res.json({ message: "Seed agora é feito no cliente. Por favor, logue como administrador." });
-  });
-
-  app.post("/api/sync-auth-users", async (req, res) => {
-    console.log(`[SYNC] Request received from ${req.ip}`);
+  apiRouter.post("/sync-auth-users", async (req, res) => {
+    console.log(`[SYNC] Request received at ${new Date().toISOString()} from ${req.ip}`);
     try {
       const { users } = req.body;
       if (!users || !Array.isArray(users)) {
-        console.warn("[SYNC] Invalid payload: missing or non-array users");
         return res.status(400).json({ error: "Invalid users array" });
       }
 
-      // Basic validation for each user
       for (const u of users) {
         if (u.email && u.email.includes(' ')) {
           return res.status(400).json({ error: `Email inválido: contém espaços (${u.email})` });
@@ -154,59 +162,50 @@ async function startServer() {
       
       const results = await Promise.all(users.map(async (u) => {
         try {
-          if (!u.email || !u.pass) {
-            return { email: u.email || 'unknown', status: 'error', message: 'Email or password missing' };
-          }
+          if (!u.email || !u.pass) return { email: u.email || 'unknown', status: 'error', message: 'Email or password missing' };
           const authRes = await authRest.signUp(u.email, u.pass);
           return { email: u.email, uid: authRes.uid, status: 'synced' };
         } catch (e: any) {
-          console.error(`[SYNC] Error syncing ${u.email}:`, e.message);
           return { email: u.email, status: 'error', message: e.message };
         }
       }));
       
-      console.log(`[SYNC] Completed sync for ${users.length} users`);
       res.json({ results });
     } catch (error: any) {
-      console.error("[SYNC] Critical Error:", error);
       res.status(500).json({ error: error.message || "Unknown server error" });
     }
   });
 
-  app.post("/api/login", async (req, res) => {
+  apiRouter.post("/login", async (req, res) => {
     const { email, password } = req.body;
     try {
-      // Validate via REST (this works around Identity Toolkit API project mismatches)
       const userData = await authRest.signIn(email, password);
-      
-      res.json({ 
-        success: true, 
-        uid: userData.uid,
-        email: userData.email
-      });
+      res.json({ success: true, uid: userData.uid, email: userData.email });
     } catch (error: any) {
       res.status(401).json({ error: error.message || "Falha no login" });
     }
   });
 
-  app.post("/api/reset-password", async (req, res) => {
+  apiRouter.post("/reset-password", async (req, res) => {
     try {
       const { email, newPassword } = req.body;
-      const result = await authRest.updatePassword(email, newPassword);
+      await authRest.updatePassword(email, newPassword);
       res.json({ success: true, message: "Senha atualizada com sucesso" });
     } catch (error: any) {
-      console.error("Reset Password Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.all("/api/*", (req, res) => {
-    console.warn(`[API] Unhandled ${req.method} ${req.originalUrl}`);
+  // Catch-all for API that didn't match any route
+  apiRouter.all("*", (req, res) => {
     res.status(404).json({ 
       error: `Endpoint não encontrado ou método não permitido: ${req.method} ${req.originalUrl}`,
       availableEndpoints: ["/api/health", "/api/sync-auth-users", "/api/login", "/api/reset-password"]
     });
   });
+
+  // Mount the router
+  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
