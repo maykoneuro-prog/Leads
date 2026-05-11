@@ -16,8 +16,8 @@ async function startServer() {
 
   app.use(express.json());
 
-  app.use("/api/*", (req, res, next) => {
-    console.log(`[API] ${req.method} ${req.originalUrl} - From: ${req.ip}`);
+  app.use("/api", (req, res, next) => {
+    console.log(`[API] ${req.method} ${req.url} (Full: ${req.originalUrl}) - From: ${req.ip}`);
     next();
   });
 
@@ -198,6 +198,14 @@ async function startServer() {
       console.error("Reset Password Error:", error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.all("/api/*", (req, res) => {
+    console.warn(`[API] Unhandled ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ 
+      error: `Endpoint não encontrado ou método não permitido: ${req.method} ${req.originalUrl}`,
+      availableEndpoints: ["/api/health", "/api/sync-auth-users", "/api/login", "/api/reset-password"]
+    });
   });
 
   // Vite middleware for development
